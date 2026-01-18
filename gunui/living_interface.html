@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aetherium: Living Interface</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: monospace; }
+        canvas { display: block; }
+        #status {
+            position: absolute; bottom: 20px; left: 20px;
+            color: #444; font-size: 12px; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="status">WAITING FOR SIGNAL...</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particles = [];
+        const numParticles = 800; // จำนวนอนุภาค
+        let currentShape = 'CHAOS'; // สถานะปัจจุบัน
+        let audioLevel = 0; // ระดับเสียงจำลอง
+
+        // --- 1. Particle Class ---
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.tx = this.x; // Target X (จุดหมายที่จะวิ่งไป)
+                this.ty = this.y; // Target Y
+                this.vx = 0;
+                this.vy = 0;
+                this.color = `hsl(${Math.random()*60 + 200}, 80%, 60%)`; // Blue-ish
+                this.size = Math.random() * 2 + 1;
+            }
+
+            update() {
+                // Physics: วิ่งเข้าหาจุดหมาย (Lerp)
+                const dx = this.tx - this.x;
+                const dy = this.ty - this.y;
+                
+                this.vx = dx * 0.05; // ความเร็วในการพุ่งหาจุดหมาย
+                this.vy = dy * 0.05;
+
+                // เพิ่มความสั่นไหวถ้ามีเสียง (Voice Reaction)
+                if (audioLevel > 0) {
+                    this.x += (Math.random() - 0.5) * audioLevel;
+                    this.y += (Math.random() - 0.5) * audioLevel;
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // --- 2. Shape Generation Logic (Generative UI) ---
+        function setShape(shape) {
+            currentShape = shape;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            particles.forEach((p, i) => {
+                const angle = (i / numParticles) * Math.PI * 2;
+
+                if (shape === 'CIRCLE') { // โหมดสแตนด์บาย (วงแหวน AI)
+                    const r = 150;
+                    p.tx = cx + Math.cos(angle) * r;
+                    p.ty = cy + Math.sin(angle) * r;
+                    p.color = `hsl(210, 100%, 70%)`;
+                } 
+                else if (shape === 'WAVE') { // โหมดรับเสียง (คลื่นเสียง)
+                    const x = (i / numParticles) * canvas.width;
+                    const y = cy + Math.sin(i * 0.1) * 100;
+                    p.tx = x;
+                    p.ty = y;
+                    p.color = `hsl(120, 100%, 70%)`; // สีเขียว
+                }
+                else if (shape === 'DOC') { // โหมดสร้างเอกสาร (สี่เหลี่ยม)
+                    // Logic ง่ายๆ เพื่อเรียงเป็นสี่เหลี่ยม
+                    const row = Math.floor(i / 40); 
+                    const col = i % 40;
+                    p.tx = cx - 200 + col * 10;
+                    p.ty = cy - 200 + row * 10;
+                    p.color = `hsl(40, 100%, 70%)`; // สีทอง
+                }
+                else { // Chaos / Idle
+                    p.tx = p.x + (Math.random() - 0.5) * 50;
+                    p.ty = p.y + (Math.random() - 0.5) * 50;
+                }
+            });
+            statusDiv.innerText = `MODE: ${shape}`;
+        }
+
+        // --- 3. Animation Loop ---
+        function init() {
+            for(let i=0; i<numParticles; i++) particles.push(new Particle());
+            animate();
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.2)'; // Trail effect
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        // --- 4. Simulated Backend Connection ---
+        // ฟังก์ชันนี้จะถูกเรียกโดย Python (ผ่าน Selenium หรือ WebSockets ในของจริง)
+        window.updateSystemState = function(state, audioAmp = 0) {
+            audioLevel = audioAmp;
+            if (state !== currentShape) setShape(state);
+        }
+
+        init();
+        
+        // *DEMO ONLY*: จำลองการเปลี่ยนสถานะทุก 3 วินาที (ลบออกเมื่อใช้จริง)
+        /*
+        let states = ['CIRCLE', 'WAVE', 'DOC', 'CHAOS'];
+        let idx = 0;
+        setInterval(() => {
+            setShape(states[idx]);
+            idx = (idx + 1) % states.length;
+            if(states[idx] === 'WAVE') audioLevel = 5; else audioLevel = 0;
+        }, 3000);
+        */
+    </script>
+</body>
+</html>
