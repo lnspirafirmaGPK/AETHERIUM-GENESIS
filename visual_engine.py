@@ -3,7 +3,7 @@ import webbrowser
 import os
 from colorama import init, Fore, Style
 
-# Initialize colorama for colored terminal output
+# Initialize colorama
 init(autoreset=True)
 
 class GunUI:
@@ -11,26 +11,26 @@ class GunUI:
         self.current_mode = "IDLE"
         self.interface_opened = False
 
-    # --- ส่วนที่ 1: ควบคุม Web Interface (Living UI) ---
     def launch_interface(self):
-        """เปิดหน้าจอ Living Interface (HTML Canvas) ใน Browser"""
-        # หา path ของไฟล์ living_interface.html แบบสัมพัทธ์
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(current_dir, "gunui", "living_interface.html")
-        
-        if os.path.exists(path):
-            print(f"{Fore.CYAN}[System]: Launching Neural Interface at {path}")
-            webbrowser.open(f"file://{path}")
-            self.interface_opened = True
-        else:
-            print(f"{Fore.RED}[Error]: Interface file not found at {path}")
-            print(f"{Fore.YELLOW}[Hint]: Make sure 'living_interface.html' is inside 'gunui' folder.")
+        """เปิดหน้าจอ Living Interface"""
+        # ใช้ path แบบสัมพัทธ์เพื่อให้หาไฟล์เจอไม่ว่าจะอยู่ที่ไหน
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(current_dir, "gunui", "living_interface.html")
+            
+            if os.path.exists(path):
+                print(f"{Fore.CYAN}[System]: Launching Neural Interface...")
+                # เปิดไฟล์ html ใน browser (ถ้าทำได้)
+                webbrowser.open(f"file://{path}")
+                self.interface_opened = True
+            else:
+                print(f"{Fore.RED}[Error]: File not found: {path}")
+        except Exception as e:
+            print(f"{Fore.RED}[Error]: Could not launch interface. {e}")
 
     def morph_ui(self, shape_command):
-        """สั่งเปลี่ยนรูปร่าง UI (CIRCLE, WAVE, DOC)"""
+        """สั่งเปลี่ยนรูปร่าง UI"""
         self.current_mode = shape_command
-        # หมายเหตุ: ในเวอร์ชันนี้ Python จะสั่ง Web ผ่าน Console เท่านั้น
-        # การเชื่อมต่อจริงต้องใช้ Server (WebSocket) ซึ่งจะทำในขั้นสูงต่อไป
         print(f"\n{Fore.CYAN}>>> UI MORPHING >>> {shape_command}")
         
         if shape_command == "WAVE":
@@ -41,18 +41,18 @@ class GunUI:
             print(f"{Fore.BLUE}   [Visual]: Particles forming Core Identity (Standby)")
 
     def visualize_voice(self, intensity):
-        """จำลองการตอบสนองต่อเสียง"""
+        """จำลองกราฟเสียง"""
         bar = "||" * int(intensity)
         print(f"\r{Fore.GREEN}[Voice Input]: {bar}", end="")
 
-    # --- ส่วนที่ 2: แสดงผลใน Terminal (CLI Status) ---
+    # --- ส่วนแสดงผลข้อความเดิม ---
     def show_nirodha_state(self):
         print(f"\n{Fore.BLACK}{Style.BRIGHT}[GunUI]: ⚫ SYSTEM STATE: NIRODHA (Deep Sleep)")
         print(f"{Fore.BLACK}   ...Particles are static... Waiting for signal...")
 
     def show_pre_cognition(self):
         print(f"\n{Fore.YELLOW}{Style.BRIGHT}[GunUI]: 🟡 SYSTEM STATE: PRE-COGNITION")
-        print(f"{Fore.YELLOW}   ...Particles spinning (Vorticity Rising)... Gate Detected.")
+        print(f"{Fore.YELLOW}   ...Particles spinning... Gate Detected.")
 
     def show_awakened(self):
         print(f"\n{Fore.CYAN}{Style.BRIGHT}[GunUI]: 🔵 SYSTEM STATE: AWAKENED")
@@ -61,13 +61,3 @@ class GunUI:
 
     def show_access_denied(self):
         print(f"\n{Fore.RED}{Style.BRIGHT}[GunUI]: 🔴 ACCESS DENIED")
-        print(f"{Fore.RED}   ...Chaos Detected... Reverting to Sleep Mode.")
-
-    def animate_boot_sequence(self):
-        print(f"\n{Fore.MAGENTA}>>> LOADING KERNEL: INSPIRA MODULE <<<")
-        loading_bar = ["|", "/", "-", "\\"]
-        for _ in range(5):
-            for char in loading_bar:
-                print(f"\r{Fore.MAGENTA}Syncing Consciousness... {char}", end="")
-                time.sleep(0.1)
-        print(f"\r{Fore.MAGENTA}Syncing Consciousness... COMPLETE.   ")
