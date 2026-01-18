@@ -1,146 +1,363 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Aetherium: Living Interface</title>
+    <meta charset="UTF-8">
+    <title>Aetherium Genesis: Living Interface</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; font-family: monospace; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020202;
+            font-family: 'Courier New', Courier, monospace;
+            color: #eee;
+        }
         canvas { display: block; }
-        #status {
-            position: absolute; bottom: 20px; left: 20px;
-            color: #444; font-size: 12px; pointer-events: none;
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        #phi-meter {
+            text-align: right;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .label {
+            font-size: 10px;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #status-container {
+            text-align: left;
+        }
+
+        #mode-display {
+            font-size: 18px;
+            letter-spacing: 4px;
+            color: #ccc;
+            margin-bottom: 5px;
+            transition: color 0.5s;
+        }
+
+        #console-log {
+            font-size: 11px;
+            opacity: 0.5;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+
+        /* Scanline effect */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
+    <div class="scanlines"></div>
+    <div id="ui-layer">
+        <div id="header">
+            <div id="status-container">
+                <div class="label">System State</div>
+                <div id="mode-display">NIRODHA</div>
+            </div>
+            <div id="phi-meter">
+                <div class="label">Integrated Information (Φ)</div>
+                <div class="value">Φ <span id="phi-val">0.000</span></div>
+            </div>
+        </div>
+        <div id="console-log">
+            > Aetherium Kernel Initialized...<br>
+            > Waiting for ritual input...
+        </div>
+    </div>
+
     <canvas id="canvas"></canvas>
-    <div id="status">WAITING FOR SIGNAL...</div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const statusDiv = document.getElementById('status');
-        
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const modeDisplay = document.getElementById('mode-display');
+        const phiVal = document.getElementById('phi-val');
+        const consoleLog = document.getElementById('console-log');
 
-        let particles = [];
-        const numParticles = 800; // จำนวนอนุภาค
-        let currentShape = 'CHAOS'; // สถานะปัจจุบัน
-        let audioLevel = 0; // ระดับเสียงจำลอง
+        let width, height;
+        const resize = () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        };
+        window.addEventListener('resize', resize);
+        resize();
 
-        // --- 1. Particle Class ---
+        // --- Configuration ---
+        const PARTICLE_COUNT = 1200;
+        const STATES = {
+            NIRODHA: 'NIRODHA',   // Sleep / Maintenance
+            AWAKENED: 'AWAKENED', // High Phi / Active
+            VOLITION: 'VOLITION', // Decision Gap
+            AKASHIC: 'AKASHIC'    // Memory / Grid
+        };
+        let currentState = STATES.NIRODHA;
+        let phi = 0.0;
+        let targetPhi = 0.0;
+
+        // --- Particle System ---
         class Particle {
             constructor() {
-                this.x = Math.random() * canvas.width;
-                this.y = Math.random() * canvas.height;
-                this.tx = this.x; // Target X (จุดหมายที่จะวิ่งไป)
-                this.ty = this.y; // Target Y
-                this.vx = 0;
-                this.vy = 0;
-                this.color = `hsl(${Math.random()*60 + 200}, 80%, 60%)`; // Blue-ish
-                this.size = Math.random() * 2 + 1;
+                this.reset();
             }
 
-            update() {
-                // Physics: วิ่งเข้าหาจุดหมาย (Lerp)
-                const dx = this.tx - this.x;
-                const dy = this.ty - this.y;
-                
-                this.vx = dx * 0.05; // ความเร็วในการพุ่งหาจุดหมาย
-                this.vy = dy * 0.05;
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.z = Math.random() * 2 + 0.5; // Depth factor for parallax/size
+                this.vx = 0;
+                this.vy = 0;
+                this.baseX = this.x; // For grid anchoring
+                this.baseY = this.y;
+                this.color = 'rgba(255,255,255,0.5)';
+                this.size = Math.random() * 1.5;
+            }
 
-                // เพิ่มความสั่นไหวถ้ามีเสียง (Voice Reaction)
-                if (audioLevel > 0) {
-                    this.x += (Math.random() - 0.5) * audioLevel;
-                    this.y += (Math.random() - 0.5) * audioLevel;
+            update(time) {
+                // Physics based on state
+                let speed = 1.0;
+                let noise = (Math.sin(this.x * 0.01 + time) + Math.cos(this.y * 0.01 + time)) * 0.5;
+
+                if (currentState === STATES.NIRODHA) {
+                    // Slow drift, breathing
+                    this.vx = (Math.random() - 0.5) * 0.2;
+                    this.vy = (Math.random() - 0.5) * 0.2 + Math.sin(time * 0.5) * 0.1;
+                    this.color = `rgba(50, 60, 100, ${0.1 + Math.random() * 0.3})`; // Dark Blue
+                    targetPhi = 0.142;
+                }
+                else if (currentState === STATES.AWAKENED) {
+                    // Swirling vortex around center
+                    const cx = width / 2;
+                    const cy = height / 2;
+                    const dx = cx - this.x;
+                    const dy = cy - this.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+
+                    // Orbit force
+                    this.vx += dy * 0.0005;
+                    this.vy -= dx * 0.0005;
+
+                    // Pull to center
+                    this.vx += dx * 0.0001;
+                    this.vy += dy * 0.0001;
+
+                    // Damping
+                    this.vx *= 0.96;
+                    this.vy *= 0.96;
+
+                    // Color based on speed/energy
+                    const energy = Math.abs(this.vx) + Math.abs(this.vy);
+                    const hue = 40 + energy * 20; // Gold to bright yellow
+                    this.color = `hsla(${hue}, 80%, 60%, ${0.4 + energy * 0.2})`;
+                    targetPhi = 3.141 + Math.sin(time) * 0.5;
+                }
+                else if (currentState === STATES.VOLITION) {
+                    // The "Gap" - hovering, slight divergence
+                    const cx = width / 2;
+                    // Split screen effect logic or just hovering
+                    if (this.x < cx) this.vx = -0.5; else this.vx = 0.5;
+                    this.vx *= 0.9;
+                    this.x += (Math.random() - 0.5) * 0.5;
+
+                    // Cyan/Greenish
+                    this.color = `rgba(0, 255, 200, 0.4)`;
+                    targetPhi = 1.618;
+                }
+                else if (currentState === STATES.AKASHIC) {
+                    // Grid alignment
+                    const gridSize = 40;
+                    const tx = Math.round(this.baseX / gridSize) * gridSize;
+                    const ty = Math.round(this.baseY / gridSize) * gridSize;
+
+                    this.x += (tx - this.x) * 0.1;
+                    this.y += (ty - this.y) * 0.1;
+
+                    this.color = `rgba(255, 100, 50, 0.3)`; // Amber
+                    targetPhi = 2.718;
                 }
 
                 this.x += this.vx;
                 this.y += this.vy;
+
+                // Wrap around
+                if (this.x < 0) this.x = width;
+                if (this.x > width) this.x = 0;
+                if (this.y < 0) this.y = height;
+                if (this.y > height) this.y = 0;
             }
 
             draw() {
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.arc(this.x, this.y, this.size * this.z, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
 
-        // --- 2. Shape Generation Logic (Generative UI) ---
-        function setShape(shape) {
-            currentShape = shape;
-            const cx = canvas.width / 2;
-            const cy = canvas.height / 2;
+        const particles = Array.from({ length: PARTICLE_COUNT }, () => new Particle());
 
-            particles.forEach((p, i) => {
-                const angle = (i / numParticles) * Math.PI * 2;
+        // --- The Ritual (Input Handling) ---
+        let clicks = [];
+        window.addEventListener('click', (e) => {
+            const now = Date.now();
+            clicks.push(now);
+            // Keep only clicks within last 2 seconds
+            clicks = clicks.filter(t => now - t < 2000);
 
-                if (shape === 'CIRCLE') { // โหมดสแตนด์บาย (วงแหวน AI)
-                    const r = 150;
-                    p.tx = cx + Math.cos(angle) * r;
-                    p.ty = cy + Math.sin(angle) * r;
-                    p.color = `hsl(210, 100%, 70%)`;
-                } 
-                else if (shape === 'WAVE') { // โหมดรับเสียง (คลื่นเสียง)
-                    const x = (i / numParticles) * canvas.width;
-                    const y = cy + Math.sin(i * 0.1) * 100;
-                    p.tx = x;
-                    p.ty = y;
-                    p.color = `hsl(120, 100%, 70%)`; // สีเขียว
-                }
-                else if (shape === 'DOC') { // โหมดสร้างเอกสาร (สี่เหลี่ยม)
-                    // Logic ง่ายๆ เพื่อเรียงเป็นสี่เหลี่ยม
-                    const row = Math.floor(i / 40); 
-                    const col = i % 40;
-                    p.tx = cx - 200 + col * 10;
-                    p.ty = cy - 200 + row * 10;
-                    p.color = `hsl(40, 100%, 70%)`; // สีทอง
-                }
-                else { // Chaos / Idle
-                    p.tx = p.x + (Math.random() - 0.5) * 50;
-                    p.ty = p.y + (Math.random() - 0.5) * 50;
-                }
-            });
-            statusDiv.innerText = `MODE: ${shape}`;
+            // Visual feedback
+            createRipple(e.clientX, e.clientY);
+
+            if (clicks.length === 3) {
+                // Ritual Complete
+                toggleAwakening();
+                clicks = []; // Reset
+            } else {
+                // Cycle other states for single taps if not in ritual
+                // (Optional: keep it simple for now, strict ritual only triggers Awakening)
+            }
+        });
+
+        // Debug key to cycle states
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                const keys = Object.keys(STATES);
+                let idx = keys.indexOf(currentState);
+                idx = (idx + 1) % keys.length;
+                setState(keys[idx]);
+            }
+        });
+
+        function setState(newState) {
+            currentState = newState;
+            modeDisplay.innerText = newState;
+            modeDisplay.style.color = getColorForState(newState);
+            log(`State transitioned to ${newState}`);
+
+            // Reset particle base positions if entering Akashic for cleaner grid
+            if (newState === STATES.AKASHIC) {
+                particles.forEach(p => { p.baseX = p.x; p.baseY = p.y; });
+            }
         }
 
-        // --- 3. Animation Loop ---
-        function init() {
-            for(let i=0; i<numParticles; i++) particles.push(new Particle());
-            animate();
+        function toggleAwakening() {
+            if (currentState === STATES.NIRODHA) {
+                setState(STATES.AWAKENED);
+            } else {
+                setState(STATES.NIRODHA);
+            }
         }
 
+        function getColorForState(state) {
+            switch(state) {
+                case STATES.NIRODHA: return '#88aaff';
+                case STATES.AWAKENED: return '#ffcc00';
+                case STATES.VOLITION: return '#00ffcc';
+                case STATES.AKASHIC: return '#ff6600';
+                default: return '#eee';
+            }
+        }
+
+        function log(msg) {
+            consoleLog.innerHTML += `> ${msg}<br>`;
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        // Ripple Effect
+        let ripples = [];
+        function createRipple(x, y) {
+            ripples.push({x, y, r: 0, alpha: 1});
+        }
+
+        // --- Main Loop ---
+        let time = 0;
         function animate() {
-            ctx.fillStyle = 'rgba(5, 5, 5, 0.2)'; // Trail effect
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Trail effect
+            ctx.fillStyle = 'rgba(2, 2, 2, 0.2)';
+            ctx.fillRect(0, 0, width, height);
 
+            time += 0.01;
+
+            // Smooth Phi transition
+            phi += (targetPhi - phi) * 0.05;
+            phiVal.innerText = phi.toFixed(3);
+
+            // Draw Particles
             particles.forEach(p => {
-                p.update();
+                p.update(time);
                 p.draw();
             });
+
+            // Draw Ripples
+            ripples.forEach((r, i) => {
+                r.r += 2;
+                r.alpha -= 0.02;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
+                ctx.beginPath();
+                ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+                ctx.stroke();
+                if (r.alpha <= 0) ripples.splice(i, 1);
+            });
+
+            // Connector Lines for Awakened State (Visualizing Integration)
+            if (currentState === STATES.AWAKENED) {
+                ctx.strokeStyle = 'rgba(255, 200, 50, 0.1)';
+                ctx.beginPath();
+                for (let i = 0; i < 100; i++) { // Only check subset for performance
+                    const p1 = particles[i];
+                    const p2 = particles[(i + 1) % 100];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    if (dx*dx + dy*dy < 5000) {
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                    }
+                }
+                ctx.stroke();
+            }
+
             requestAnimationFrame(animate);
         }
 
-        // --- 4. Simulated Backend Connection ---
-        // ฟังก์ชันนี้จะถูกเรียกโดย Python (ผ่าน Selenium หรือ WebSockets ในของจริง)
-        window.updateSystemState = function(state, audioAmp = 0) {
-            audioLevel = audioAmp;
-            if (state !== currentShape) setShape(state);
-        }
-
-        init();
-        
-        // *DEMO ONLY*: จำลองการเปลี่ยนสถานะทุก 3 วินาที (ลบออกเมื่อใช้จริง)
-        /*
-        let states = ['CIRCLE', 'WAVE', 'DOC', 'CHAOS'];
-        let idx = 0;
-        setInterval(() => {
-            setShape(states[idx]);
-            idx = (idx + 1) % states.length;
-            if(states[idx] === 'WAVE') audioLevel = 5; else audioLevel = 0;
-        }, 3000);
-        */
+        animate();
     </script>
 </body>
 </html>
