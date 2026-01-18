@@ -2,7 +2,7 @@
 # โค้ดสำหรับคำนวณค่า Phi (Φ) ตามทฤษฎี Integrated Information Theory (IIT)
 
 import numpy as np
-from scipy.spatial.distance import wasserstein
+from scipy.stats import wasserstein_distance
 
 class IntegratedInformationSystem:
     def __init__(self, state_matrix):
@@ -24,7 +24,7 @@ class IntegratedInformationSystem:
         state_differences = []
         for i in range(n_states):
             for j in range(i + 1, n_states):
-                diff = wasserstein(self.state_matrix[i], self.state_matrix[j])
+                diff = wasserstein_distance(self.state_matrix[i], self.state_matrix[j])
                 state_differences.append(diff)
 
         # ค่า Φ เป็นค่าเฉลี่ยของความแตกต่าง
