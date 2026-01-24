@@ -73,12 +73,18 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
+        let backendEntities = {};
+
         ws.onopen = () => log("Connected to LCL Core");
         ws.onmessage = (event) => {
             try {
-                const instruction = JSON.parse(event.data);
-                log("RCV: " + JSON.stringify(instruction));
-                executeInstruction(instruction);
+                const msg = JSON.parse(event.data);
+                if (msg.type === "STATE") {
+                    backendEntities = msg.data.entities;
+                } else {
+                    log("RCV: " + JSON.stringify(msg));
+                    executeInstruction(msg);
+                }
             } catch (e) {
                 log("ERR: " + e.message);
             }
@@ -234,6 +240,22 @@
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             ctx.fillRect(0,0,width,height);
 
+            // Draw Backend Entities
+            for (const id in backendEntities) {
+                 const ent = backendEntities[id];
+                 const x = ent.position[0] * width;
+                 const y = ent.position[1] * height;
+
+                 ctx.fillStyle = '#00ff88';
+                 ctx.shadowBlur = 10;
+                 ctx.shadowColor = '#00ff88';
+                 ctx.beginPath();
+                 ctx.arc(x, y, 8, 0, Math.PI*2);
+                 ctx.fill();
+                 ctx.shadowBlur = 0;
+            }
+
+            // Draw Local Particles
             for(let i = particles.length -1; i>=0; i--) {
                 const p = particles[i];
                 p.update();

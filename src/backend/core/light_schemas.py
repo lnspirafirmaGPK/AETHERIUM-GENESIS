@@ -1,6 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional, Tuple
-from enum import Enum
+from typing import Optional, Tuple, List, Dict
+from enum import Enum, IntEnum
 
 class LightAction(str, Enum):
     SPAWN = "SPAWN"
@@ -12,6 +12,12 @@ class TemporalType(str, Enum):
     INSTANT = "instant"
     CONTINUOUS = "continuous"
 
+class PriorityLevel(IntEnum):
+    AMBIENT = 0
+    USER = 1
+    SAFETY = 2
+    SYSTEM = 3
+
 class LightIntent(BaseModel):
     action: LightAction
     target: Optional[str] = None
@@ -21,6 +27,8 @@ class LightIntent(BaseModel):
     color_hint: Optional[str] = None
     decay: Optional[float] = None
     temporal: Optional[TemporalType] = None
+    priority: int = PriorityLevel.USER
+    source: str = "unknown"
 
 class LightInstruction(BaseModel):
     intent: LightAction
@@ -32,3 +40,14 @@ class LightInstruction(BaseModel):
     region: Optional[Tuple[float, float, float, float]] = None
     motion: Optional[str] = None
     color_profile: Optional[str] = None
+
+class LightEntity(BaseModel):
+    id: str
+    position: Tuple[float, float]
+    velocity: Tuple[float, float]
+    energy: float
+    history: List[Tuple[float, float]] = []
+
+class LightState(BaseModel):
+    entities: Dict[str, LightEntity]
+    system_energy: float
