@@ -8,3 +8,5 @@ pydantic
 requests
 google-generativeai
 Pillow
+httpx
+torch
