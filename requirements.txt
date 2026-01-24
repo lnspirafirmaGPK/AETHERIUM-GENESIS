@@ -1,2 +1,4 @@
 colorama
 pytest
+numpy
+scipy
