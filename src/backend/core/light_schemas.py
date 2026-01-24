@@ -40,6 +40,7 @@ class LightInstruction(BaseModel):
     region: Optional[Tuple[float, float, float, float]] = None
     motion: Optional[str] = None
     color_profile: Optional[str] = None
+    text_content: Optional[str] = None
 
 class LightEntity(BaseModel):
     id: str

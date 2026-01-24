@@ -1,13 +1,14 @@
 from .light_schemas import LightIntent, LightAction, TemporalType
+from .search_schemas import SearchIntent
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Union
 
 class LightweightAI:
     """
     Lightweight AI Core
     Rule-based resolver for immediate feedback and baseline testing.
     """
-    def resolve_intent(self, input_data: Dict[str, Any]) -> LightIntent:
+    def resolve_intent(self, input_data: Dict[str, Any]) -> Union[LightIntent, SearchIntent]:
         input_type = input_data.get("type")
 
         if input_type == "touch":
@@ -25,6 +26,13 @@ class LightweightAI:
 
         if input_type == "voice":
             text = input_data.get("text", "").lower()
+
+            # Check for Search Intent
+            search_match = re.search(r"(search for|search|find|ค้นหา)\s+(.*)", text)
+            if search_match:
+                query = search_match.group(2).strip()
+                return SearchIntent(query=query, source="voice")
+
             if re.search(r"move|ย้าย", text):
                 return LightIntent(action=LightAction.MOVE)
             if re.search(r"erase|ลบ", text):
