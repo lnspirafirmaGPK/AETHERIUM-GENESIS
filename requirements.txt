@@ -1,1 +1,12 @@
 colorama
+pytest
+numpy
+scipy
+fastapi
+uvicorn
+pydantic
+requests
+google-generativeai
+Pillow
+httpx
+torch
