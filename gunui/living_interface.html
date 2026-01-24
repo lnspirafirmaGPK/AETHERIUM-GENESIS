@@ -5,70 +5,227 @@
     <title>GunUI: Vessel of Living Intent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; background-color: #050505; color: #e0e0e0; font-family: 'Inter', sans-serif; overflow: hidden; touch-action: none; }
-        canvas { display: block; filter: blur(0.5px) contrast(1.1); }
-        .glass { background: rgba(10, 10, 10, 0.7); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .ritual-hint { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; }
+        #status {
+            position: absolute; bottom: 30px; left: 0; right: 0;
+            color: rgba(255, 255, 255, 0.5); text-align: center; font-size: 14px; pointer-events: none;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        #interaction-hint {
+            position: absolute; top: 40%; left: 0; right: 0;
+            color: rgba(255, 255, 255, 0.3); text-align: center;
+            font-size: 16px; pointer-events: none;
+            opacity: 0; transition: opacity 1s;
+        }
     </style>
 </head>
-<body>  <div id="ui-layer" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-6 opacity-0 transition-opacity duration-1000">
-    <div class="flex justify-between items-start">
-        <div class="glass p-4 rounded-2xl w-64">
-            <h1 class="text-sm font-bold tracking-tighter text-white opacity-80">AETHERIUM GENESIS</h1>
-            <p class="text-[10px] opacity-40 mb-3">SYSTEM SIGNATURE: INSPIRAFIRMA</p>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="interaction-hint">Tap 3 times to Awaken</div>
+    <div id="status">System State: NIRODHA</div>
 
-            <div class="space-y-3">
-                <div>
-                    <div class="flex justify-between text-[10px] mb-1"><span>PHI ($\Phi$) INTEGRATION</span><span id="phi-val">0.00</span></div>
-                    <div class="h-1 bg-white/10 rounded-full overflow-hidden"><div id="phi-bar" class="h-full bg-cyan-400 transition-all" style="width: 0%"></div></div>
-                </div>
-                <div>
-                    <div class="flex justify-between text-[10px] mb-1"><span>COGNITIVE LOAD</span><span id="load-val">0%</span></div>
-                    <div class="h-1 bg-white/10 rounded-full overflow-hidden"><div id="load-bar" class="h-full bg-purple-500 transition-all" style="width: 0%"></div></div>
-                </div>
-            </div>
-        </div>
-        <div id="intent-tag" class="glass px-3 py-1 rounded-full text-[10px] font-bold tracking-widest text-cyan-400">IDLE</div>
-    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        const hintDiv = document.getElementById('interaction-hint');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-    <div class="flex justify-between items-end">
-        <div id="terminal" class="glass w-72 h-32 p-3 rounded-xl font-mono text-[9px] text-green-400 overflow-hidden flex flex-col-reverse">
-            <div>> AETHERBUS INITIALIZED...</div>
-        </div>
-        <div class="text-right">
-            <div class="text-[10px] opacity-30 uppercase tracking-widest mb-1">Internal Sentience</div>
-            <div id="status-glow" class="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)] ml-auto"></div>
-        </div>
-    </div>
-</div>
+        // Configuration
+        const config = {
+            particleCount: 1200,
+            connectionDistance: 100,
+            mouseRepelDist: 150,
+            knockTimeout: 2000,
+            requiredKnocks: 3
+        };
 
-<div id="ritual-layer" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#050505]">
-    <div class="ritual-hint text-[10px] tracking-[0.3em] text-white/40 uppercase">Perform 3-Tap Ritual to Wake</div>
-    <div id="tap-indicators" class="flex gap-4 mt-6">
-        <div class="w-2 h-2 rounded-full border border-white/20"></div>
-        <div class="w-2 h-2 rounded-full border border-white/20"></div>
-        <div class="w-2 h-2 rounded-full border border-white/20"></div>
-    </div>
-</div>
+        // State
+        let state = {
+            mode: 'NIRODHA', // NIRODHA, AWAKENING, AWAKENED, LISTENING, PROCESSING, APP_ICON, ART_GEN, DOC_GEN, MAP_NAV
+            knocks: 0,
+            lastKnockTime: 0,
+            audioLevel: 0,
+            targetShape: []
+        };
 
-<canvas id="gun-canvas"></canvas>
+        let particles = [];
 
-<script>
-    /**
-     * AETHEBUS (AetherfirmBus): ระบบประสาทแบบ Event-Driven
-     */
-    class AetheBus {
-        constructor() { this.listeners = {}; }
-        publish(event, payload) {
-            if (!this.listeners[event]) return;
-            this.listeners[event].forEach(callback => callback(payload));
+        // --- Particle Class ---
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.tx = this.x; // Target X
+                this.ty = this.y; // Target Y
+                this.vx = 0;
+                this.vy = 0;
+                this.baseColor = { h: 200, s: 80, l: 60 };
+                this.color = `hsla(${this.baseColor.h}, ${this.baseColor.s}%, ${this.baseColor.l}%, 0.8)`;
+                this.size = Math.random() * 2 + 0.5;
+                this.friction = 0.94;
+                this.ease = 0.05;
+            }
+
+            update() {
+                // Physics to target
+                const dx = this.tx - this.x;
+                const dy = this.ty - this.y;
+                
+                this.vx += dx * this.ease;
+                this.vy += dy * this.ease;
+
+                // Voice reaction (Noise)
+                if (state.audioLevel > 0) {
+                    this.vx += (Math.random() - 0.5) * state.audioLevel * 2;
+                    this.vy += (Math.random() - 0.5) * state.audioLevel * 2;
+                }
+                // Eye glow/highlight
+                this.targets.push({
+                     x: eyeX - 2, y: eyeY - 2, type: 'EYE', color: 'rgba(255,255,255,1)'
+                });
+            });
+
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Color Pulse based on state
+                if (state.mode === 'LISTENING') {
+                     // Rainbow effect for voice
+                     const hue = (Date.now() * 0.1 + this.x * 0.1) % 360;
+                     this.color = `hsla(${hue}, 80%, 60%, 0.9)`;
+                } else if (state.mode === 'AWAKENED') {
+                     this.color = `hsla(190, 90%, 60%, ${Math.random()*0.5 + 0.5})`;
+                } else if (state.mode === 'ART_GEN') {
+                     const hue = (this.x / canvas.width) * 360;
+                     this.color = `hsla(${hue}, 80%, 60%, 0.8)`;
+                }
+            }
+
+            if (this.state !== 'NIRODHA') return;
+            this.tapCount++;
+            const indicators = document.getElementById('tap-indicators').children;
+            if (indicators[this.tapCount-1]) indicators[this.tapCount-1].style.background = 'white';
+
+            if (this.tapCount === 3) {
+                this.wake();
+            }
         }
-        subscribe(event, callback) {
-            if (!this.listeners[event]) this.listeners[event] = [];
-            this.listeners[event].push(callback);
+
+        // --- Shape Generation ---
+        function generateTargetPoints(mode) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            particles.forEach((p, i) => {
+                let tx, ty;
+
+                switch(mode) {
+                    case 'NIRODHA': // Deep Sleep - Static Noise
+                        tx = p.x + (Math.random() - 0.5) * 2;
+                        ty = p.y + (Math.random() - 0.5) * 2;
+                        p.ease = 0.01;
+                        p.color = `hsla(0, 0%, 20%, 0.3)`;
+                        break;
+
+                    case 'AWAKENING': // Gathering to center
+                        const angle = (i / config.particleCount) * Math.PI * 2 * 3; // Spiral
+                        const r = (i / config.particleCount) * 300;
+                        tx = cx + Math.cos(angle + Date.now()*0.001) * r;
+                        ty = cy + Math.sin(angle + Date.now()*0.001) * r;
+                        p.ease = 0.1;
+                        p.color = `hsla(40, 100%, 70%, 0.9)`; // Gold
+                        break;
+
+                    case 'AWAKENED': // Circle / Core
+                        const a2 = (i / config.particleCount) * Math.PI * 2;
+                        const r2 = 180 + Math.sin(i*0.1 + Date.now()*0.005)*10;
+                        tx = cx + Math.cos(a2) * r2;
+                        ty = cy + Math.sin(a2) * r2;
+                        p.ease = 0.05;
+                        break;
+
+                    case 'LISTENING': // Wave
+                        tx = (i / config.particleCount) * canvas.width;
+                        ty = cy + Math.sin(i * 0.05 + Date.now()*0.005) * (50 + state.audioLevel * 10);
+                        p.ease = 0.2;
+                        break;
+
+                    case 'APP_ICON': // Grid of rounded squares
+                        const cols = 10;
+                        const gridSize = 60;
+                        const spacing = 80;
+                        const col = i % cols;
+                        const row = Math.floor(i / cols);
+                        const startX = cx - (cols * spacing)/2;
+                        const startY = cy - 200;
+
+                        // Icon shape logic
+                        if (i < 900) { // Limit particles for icons
+                            tx = startX + col * spacing + (i%5)*5;
+                            ty = startY + row * spacing + (Math.floor(i/5)%5)*5;
+                            p.color = `hsla(${200 + col*20}, 80%, 60%, 0.9)`;
+                        } else {
+                            // Excess particles orbit
+                            const orbA = (i / 100) * Math.PI * 2;
+                            tx = cx + Math.cos(orbA) * 400;
+                            ty = cy + Math.sin(orbA) * 400;
+                        }
+                        p.ease = 0.1;
+                        break;
+
+                    case 'ART_GEN': // Landscape / Abstract
+                         // Simple landscape approximation
+                         tx = (i / config.particleCount) * canvas.width;
+                         const noise = Math.sin(i * 0.02) * Math.cos(i * 0.01) * 200;
+                         ty = cy + noise + 100;
+                         p.ease = 0.05;
+                         break;
+
+                    case 'DOC_GEN': // Document Text Lines
+                        const docW = 400;
+                        const lineH = 20;
+                        const lineW = (i % 100);
+                        const lineN = Math.floor(i / 100);
+                        tx = cx - docW/2 + lineW * 4;
+                        ty = cy - 200 + lineN * lineH;
+                        p.color = `hsla(150, 60%, 80%, 0.9)`;
+                        p.ease = 0.1;
+                        break;
+
+                    case 'MAP_NAV': // Map Roads
+                        // Random paths simulation
+                        if (!p.mapPath) {
+                            p.mapPath = {
+                                x: Math.random() * canvas.width,
+                                y: Math.random() * canvas.height
+                            };
+                        }
+                        if (Math.random() > 0.98) {
+                             p.mapPath.x = Math.random() * canvas.width;
+                             p.mapPath.y = Math.random() * canvas.height;
+                        }
+                        tx = p.mapPath.x;
+                        ty = p.mapPath.y;
+                        p.color = `hsla(280, 80%, 70%, 0.6)`;
+                        p.ease = 0.02;
+                        break;
+
+                    default: // Chaos
+                        tx = p.x + (Math.random() - 0.5) * 50;
+                        ty = p.y + (Math.random() - 0.5) * 50;
+                }
+
+                p.tx = tx;
+                p.ty = ty;
+            });
         }
-    }
 
     /**
      * FACE TOPOLOGY GENERATOR (Client-Side)
@@ -295,6 +452,137 @@
             });
         }
 
+        // --- Interaction ---
+        function handleKnock() {
+            const now = Date.now();
+            if (now - state.lastKnockTime > config.knockTimeout) {
+                state.knocks = 0;
+            }
+
+            state.knocks++;
+            state.lastKnockTime = now;
+
+            // Visual feedback for knock
+            const ripple = document.createElement('div');
+            ripple.style.position = 'absolute';
+            ripple.style.left = '50%';
+            ripple.style.top = '50%';
+            ripple.style.width = '10px';
+            ripple.style.height = '10px';
+            ripple.style.background = 'rgba(255, 255, 255, 0.8)';
+            ripple.style.borderRadius = '50%';
+            ripple.style.transform = 'translate(-50%, -50%) scale(1)';
+            ripple.style.transition = 'transform 0.5s, opacity 0.5s';
+            document.body.appendChild(ripple);
+
+            setTimeout(() => {
+                ripple.style.transform = 'translate(-50%, -50%) scale(50)';
+                ripple.style.opacity = '0';
+            }, 10);
+            setTimeout(() => ripple.remove(), 500);
+
+            // Logic
+            if (state.mode === 'NIRODHA') {
+                 statusDiv.innerText = `ACTIVATING... (${state.knocks}/${config.requiredKnocks})`;
+                 hintDiv.style.opacity = 1;
+
+                 // Shake particles
+                 particles.forEach(p => {
+                     p.vx += (Math.random()-0.5) * 50;
+                     p.vy += (Math.random()-0.5) * 50;
+                 });
+
+                 if (state.knocks >= config.requiredKnocks) {
+                     switchState('AWAKENING');
+                     setTimeout(() => switchState('AWAKENED'), 2000);
+                     hintDiv.style.opacity = 0;
+                 }
+            } else {
+                // If already awake, simulate interaction
+                particles.forEach(p => {
+                     p.vx += (Math.random()-0.5) * 20;
+                     p.vy += (Math.random()-0.5) * 20;
+                });
+            }
+        }
+
+        canvas.addEventListener('click', handleKnock);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent zoom
+            handleKnock();
+        });
+
+        function switchState(newMode) {
+            state.mode = newMode;
+            statusDiv.innerText = `SYSTEM STATE: ${newMode}`;
+            generateTargetPoints(newMode);
+        }
+
+        // --- Init & Loop ---
+        function init() {
+            for(let i=0; i<config.particleCount; i++) particles.push(new Particle());
+
+            // Start in Nirodha
+            switchState('NIRODHA');
+            hintDiv.style.opacity = 1;
+
+            animate();
+        }
+
+        function animate() {
+            // Glow effect
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Fade out for trails
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.globalCompositeOperation = 'lighter'; // Additive blending for glow
+
+            // Dynamic updates based on mode
+            if (state.mode === 'AWAKENED' || state.mode === 'LISTENING') {
+                generateTargetPoints(state.mode); // Continuous update for animation
+            }
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- Simulation External Control (Console / Python) ---
+        window.simulateVoice = (level) => {
+            state.audioLevel = level;
+            if (level > 0 && state.mode === 'AWAKENED') {
+                switchState('LISTENING');
+            } else if (level === 0 && state.mode === 'LISTENING') {
+                switchState('AWAKENED');
+            }
+        };
+
+        window.setMode = (mode) => {
+             if (['NIRODHA', 'AWAKENING', 'AWAKENED', 'LISTENING', 'APP_ICON', 'ART_GEN', 'DOC_GEN', 'MAP_NAV'].includes(mode)) {
+                 switchState(mode);
+             }
+        };
+
+        init();
+        
+        // --- Demo Sequence for User ---
+        // Uncomment to see auto demo
+        /*
+        setTimeout(() => switchState('AWAKENING'), 2000);
+        setTimeout(() => switchState('AWAKENED'), 4000);
+        setTimeout(() => window.simulateVoice(5), 6000);
+        setTimeout(() => window.simulateVoice(0), 9000);
+        setTimeout(() => switchState('APP_ICON'), 10000);
+        setTimeout(() => switchState('ART_GEN'), 14000);
+        setTimeout(() => switchState('DOC_GEN'), 18000);
+        setTimeout(() => switchState('MAP_NAV'), 22000);
+        setTimeout(() => switchState('NIRODHA'), 26000);
+        */
+
+    </script>
         getNarrative(phi) {
             const pct = phi * 100;
             if (pct <= 0) return "VOID";
