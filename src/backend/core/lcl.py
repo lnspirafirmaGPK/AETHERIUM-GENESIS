@@ -84,6 +84,8 @@ class LightControlLogic:
         elif action == LightAction.SPAWN: cost = 2.0
         elif action == LightAction.ERASE: cost = 0.2
         elif action == LightAction.EMPHASIZE: cost = 0.1
+        elif action == LightAction.MANIFEST: cost = 5.0 # High cost
+        elif action == LightAction.ANSWER: cost = 0.5
 
         if self.system_energy >= cost:
             self.system_energy -= cost
@@ -163,6 +165,9 @@ class LightControlLogic:
                 targets = list(self.entities.values())
 
             for ent in targets:
+                # Break target lock if moving manually
+                ent.target_position = None
+
                 vx, vy = ent.velocity
                 # F=ma, assume m=1. dv = F*dt. Assume intent applies instant impulse.
                 # Scale force significantly
@@ -197,7 +202,51 @@ class LightControlLogic:
                 intent=LightAction.EMPHASIZE,
                 target=intent.target,
                 strength=intent.intensity or 1.0,
-                color_profile=intent.color_hint or "bright"
+                color_profile=intent.color_hint or "bright",
+                text_content=intent.text_content
+            )
+
+        elif intent.action == LightAction.ANSWER:
+             instruction = LightInstruction(
+                intent=LightAction.ANSWER,
+                text_content=intent.text_content
+             )
+
+        elif intent.action == LightAction.MANIFEST:
+            if intent.formation_data:
+                # Match particles to targets
+                # If we need more particles, spawn them
+                current_ids = list(self.entities.keys())
+                target_count = len(intent.formation_data)
+                current_count = len(current_ids)
+
+                # Spawn if needed
+                if current_count < target_count:
+                    needed = target_count - current_count
+                    for _ in range(needed):
+                        eid = str(uuid.uuid4())
+                        # Spawn near center initially
+                        self.entities[eid] = LightEntity(
+                            id=eid,
+                            position=(0.5, 0.5),
+                            velocity=(0.0, 0.0),
+                            energy=1.0
+                        )
+
+                # Assign targets
+                entity_ids = list(self.entities.keys())
+                for i, (tx, ty, color) in enumerate(intent.formation_data):
+                    if i < len(entity_ids):
+                        eid = entity_ids[i]
+                        self.entities[eid].target_position = (tx, ty)
+                        self.entities[eid].target_color = color
+
+                # If we have excess particles, maybe release them or let them float
+                # For now, just leave them
+
+            instruction = LightInstruction(
+                intent=LightAction.MANIFEST,
+                text_content=intent.text_content
             )
 
         return instruction
@@ -208,6 +257,28 @@ class LightControlLogic:
             x, y = entity.position
             vx, vy = entity.velocity
 
+            # Formation Physics (Target Seeking)
+            if entity.target_position:
+                tx, ty = entity.target_position
+
+                # Proportional Control (Spring force)
+                k_p = 5.0  # Spring constant
+                k_d = 0.5  # Damping
+
+                dx = tx - x
+                dy = ty - y
+
+                fx = k_p * dx - k_d * vx
+                fy = k_p * dy - k_d * vy
+
+                vx += fx * dt
+                vy += fy * dt
+
+            else:
+                # Regular drift/friction if no target
+                vx *= 0.95
+                vy *= 0.95
+
             x += vx * dt
             y += vy * dt
 
@@ -216,10 +287,6 @@ class LightControlLogic:
             if x > 1: x = 1; vx = -vx * 0.8
             if y < 0: y = 0; vy = -vy * 0.8
             if y > 1: y = 1; vy = -vy * 0.8
-
-            # Friction
-            vx *= 0.95
-            vy *= 0.95
 
             entity.position = (x, y)
             entity.velocity = (vx, vy)

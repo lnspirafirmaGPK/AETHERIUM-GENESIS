@@ -7,6 +7,8 @@ class LightAction(str, Enum):
     MOVE = "MOVE"
     ERASE = "ERASE"
     EMPHASIZE = "EMPHASIZE"
+    MANIFEST = "MANIFEST"  # Added for image formation
+    ANSWER = "ANSWER"      # Added for pure text response
 
 class TemporalType(str, Enum):
     INSTANT = "instant"
@@ -29,6 +31,10 @@ class LightIntent(BaseModel):
     temporal: Optional[TemporalType] = None
     priority: int = PriorityLevel.USER
     source: str = "unknown"
+    # Added for MANIFEST intent payload (list of particle targets)
+    # Format: [(x, y, color_hex), ...]
+    formation_data: Optional[List[Tuple[float, float, str]]] = None
+    text_content: Optional[str] = None
 
 class LightInstruction(BaseModel):
     intent: LightAction
@@ -48,6 +54,9 @@ class LightEntity(BaseModel):
     velocity: Tuple[float, float]
     energy: float
     history: List[Tuple[float, float]] = []
+    # Physics target for formation
+    target_position: Optional[Tuple[float, float]] = None
+    target_color: Optional[str] = None
 
 class LightState(BaseModel):
     entities: Dict[str, LightEntity]
