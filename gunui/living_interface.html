@@ -235,6 +235,80 @@
 
         const particles = Array.from({ length: PARTICLE_COUNT }, () => new Particle());
 
+        // --- Event Batching System (Flux Control) ---
+        class CorrectionBatchBuffer {
+            constructor() {
+                this.events = [];
+                this.lastCommit = performance.now();
+                this.isDrawing = false;
+            }
+
+            push(e) {
+                this.events.push(e);
+                if (this.shouldCommit()) {
+                    const batch = this.flush();
+                    emitCorrectionEvent(batch);
+                }
+            }
+
+            shouldCommit() {
+                const now = performance.now();
+                // 150ms window or gesture end (handled in mouseup)
+                return (now - this.lastCommit > 150);
+            }
+
+            flush() {
+                // Prepare batch for backend aggregation
+                const batch = {
+                    timestamp: Date.now(),
+                    events: [...this.events]
+                };
+                this.events = [];
+                this.lastCommit = performance.now();
+                return batch;
+            }
+        }
+
+        const batchBuffer = new CorrectionBatchBuffer();
+
+        function emitCorrectionEvent(batch) {
+             // Mock sending to backend for 'aggregate_batch'
+             console.log("[Flux]: Committing Batch to Diffusion", batch);
+             // log(`Flux: Batch Committed (${batch.events.length} events)`); // Too spammy for on-screen log
+        }
+
+        // Input Handling for Gestures
+        window.addEventListener('mousedown', () => { batchBuffer.isDrawing = true; });
+
+        window.addEventListener('mouseup', () => {
+            batchBuffer.isDrawing = false;
+            // Force commit on gesture end
+            if(batchBuffer.events.length > 0) {
+                const batch = batchBuffer.flush();
+                emitCorrectionEvent(batch);
+                log(`Flux: Gesture Committed (${batch.events.length} events)`);
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if(!batchBuffer.isDrawing) return;
+
+            // Generate RawGestureEvent
+            const event = {
+                timestamp: Date.now(),
+                mask: { x: e.clientX - 10, y: e.clientY - 10, w: 20, h: 20 },
+                intent: [e.clientX / width, e.clientY / height], // Normalize coords as intent vector
+                action_type: 'draw'
+            };
+
+            batchBuffer.push(event);
+
+            // Visual feedback (Red trace for gesture)
+            // We draw directly here for feedback, though normally handled in animate()
+            ctx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+            ctx.fillRect(event.mask.x, event.mask.y, event.mask.w, event.mask.h);
+        });
+
         // --- The Ritual (Input Handling) ---
         let clicks = [];
         window.addEventListener('click', (e) => {
