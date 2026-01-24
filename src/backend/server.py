@@ -10,11 +10,17 @@ try:
     from src.backend.core.lcl import LightControlLogic
     from src.backend.core.lightweight_ai import LightweightAI
     from src.backend.core.ai_adapter import MockAdapter
+    from src.backend.core.google_search_provider import GoogleSearchProvider
+    from src.backend.core.search_schemas import SearchIntent
+    from src.backend.core.light_schemas import LightIntent, LightAction
 except ImportError:
     # Fallback for local testing if paths differ
     from core.lcl import LightControlLogic
     from core.lightweight_ai import LightweightAI
     from core.ai_adapter import MockAdapter
+    from core.google_search_provider import GoogleSearchProvider
+    from core.search_schemas import SearchIntent
+    from core.light_schemas import LightIntent, LightAction
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +41,7 @@ app.add_middleware(
 lcl = LightControlLogic()
 lightweight_ai = LightweightAI()
 mock_adapter = MockAdapter()
+search_provider = GoogleSearchProvider()
 
 class ConnectionManager:
     def __init__(self):
@@ -121,16 +128,50 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.info(f"Lightweight Core Resolved Intent: {intent}")
 
             if intent:
-                # Set source metadata
-                intent.source = "ai" if mode == "ai" else user_input.get("type", "unknown")
+                if isinstance(intent, SearchIntent):
+                    # Perform Search
+                    logger.info(f"Executing Search: {intent.query}")
+                    results = search_provider.search(intent.query)
 
-                # Pass through Light Control Logic (LCL)
-                instruction = lcl.process(intent)
-                logger.info(f"LCL Generated Instruction: {instruction}")
+                    # Synthesize LightIntent based on results
+                    summary = "No results found."
+                    color_hint = "purple"
+                    intensity = 0.3
 
-                if instruction:
-                    # Send Instruction to Client
-                    await websocket.send_text(instruction.model_dump_json())
+                    if results:
+                        first_result = results[0]
+                        title = first_result.get("title", "")
+                        snippet = first_result.get("snippet", "")
+                        summary = f"{title}: {snippet}"
+                        color_hint = "white"
+                        intensity = 0.8
+
+                    # Create synthesized intent
+                    light_intent = LightIntent(
+                        action=LightAction.EMPHASIZE,
+                        target="GLOBAL",
+                        intensity=intensity,
+                        color_hint=color_hint,
+                        source="search_provider"
+                    )
+
+                    # Process via LCL
+                    instruction = lcl.process(light_intent)
+                    if instruction:
+                        instruction.text_content = summary
+                        await websocket.send_text(instruction.model_dump_json())
+
+                else:
+                    # Set source metadata
+                    intent.source = "ai" if mode == "ai" else user_input.get("type", "unknown")
+
+                    # Pass through Light Control Logic (LCL)
+                    instruction = lcl.process(intent)
+                    logger.info(f"LCL Generated Instruction: {instruction}")
+
+                    if instruction:
+                        # Send Instruction to Client
+                        await websocket.send_text(instruction.model_dump_json())
             else:
                 logger.warning("No intent resolved")
 
