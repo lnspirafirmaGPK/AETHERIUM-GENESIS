@@ -82,6 +82,7 @@
             this.state = 'NIRODHA'; // เริ่มต้นที่ความว่าง
             this.tapCount = 0;
             this.phi = 0;
+            this.isSleeping = false;
 
             // Memory Layer (Continuity of Self)
             this.identity = JSON.parse(localStorage.getItem('gunui_identity')) || {
@@ -119,6 +120,13 @@
 
         handleTap(e) {
             this.lastInteraction = Date.now();
+
+            // Wake from Deep Sleep (Render Loop Restart)
+            if (this.isSleeping) {
+                this.isSleeping = false;
+                this.render();
+            }
+
             if (this.state !== 'NIRODHA') return;
             this.tapCount++;
             const indicators = document.getElementById('tap-indicators').children;
@@ -140,12 +148,12 @@
             if (this.identity.awakenedCount > 1) {
                  this.log(`MEMORY_RECALLED: Awakening #${this.identity.awakenedCount}`);
             } else {
-                 this.log(`FIRST_BREATH: Genesis Cycle Initiated.`);
+                 this.log(`FIRST_BREATH: LOGENESIS Protocol Initiated.`);
             }
 
             document.getElementById('ritual-layer').style.display = 'none';
             document.getElementById('ui-layer').style.opacity = '1';
-            this.bus.publish('INTENT_CHANGE', { state: 'AWAKE', hex: '#22c55e', phi: 0.85 });
+            this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
         }
 
         getNarrative(phi) {
@@ -181,6 +189,17 @@
         }
 
         render() {
+            // Optimization: Deep Sleep check
+            if (this.state === 'NIRODHA' && this.tapCount === 0) {
+                const activeCount = this.particles.filter(p => p.alpha > 0.01).length;
+                if (activeCount === 0) {
+                    this.isSleeping = true;
+                    this.ctx.fillStyle = '#050505';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    return; // Stop Loop
+                }
+            }
+
             // NIRODHA Logic: Void Black (#050505)
             this.ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);

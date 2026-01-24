@@ -32,6 +32,7 @@
             <select id="mode">
                 <option value="std">Standard (Rule-based)</option>
                 <option value="ai">AI Adapter (Mock)</option>
+                <option value="logenesis">LOGENESIS (Adaptive)</option>
             </select>
         </label><br>
         <div style="margin-top:5px;">
@@ -74,6 +75,7 @@
         }
 
         let backendEntities = {};
+        let isNirodha = false;
 
         ws.onopen = () => log("Connected to LCL Core");
         ws.onmessage = (event) => {
@@ -81,7 +83,11 @@
                 const msg = JSON.parse(event.data);
                 if (msg.type === "STATE") {
                     backendEntities = msg.data.entities;
-                } else {
+                }
+                else if (msg.type === "LOGENESIS_RESPONSE") {
+                    handleLogenesisResponse(msg);
+                }
+                else {
                     log("RCV: " + JSON.stringify(msg));
                     executeInstruction(msg);
                 }
@@ -90,6 +96,57 @@
             }
         };
         ws.onclose = () => log("Disconnected from Server");
+
+        function handleLogenesisResponse(msg) {
+            if (msg.text_content) log("LOGENESIS: " + msg.text_content);
+
+            // State Handling
+            if (msg.state === "NIRODHA") {
+                if (!isNirodha) log("STATE: Entering NIRODHA (Silence Protocol)");
+                isNirodha = true;
+                return;
+            } else {
+                if (isNirodha) {
+                    log("STATE: Awakening...");
+                    isNirodha = false;
+                }
+            }
+
+            // Visual Qualia
+            if (msg.visual_qualia) {
+                const q = msg.visual_qualia;
+                // Update existing particles to match the mood
+                particles.forEach(p => {
+                    p.color = q.color;
+                    // Add turbulence/energy
+                    if (q.turbulence > 0.0) {
+                         p.vx += (Math.random()-0.5) * q.turbulence * 2;
+                         p.vy += (Math.random()-0.5) * q.turbulence * 2;
+                    }
+                });
+            }
+
+            // Physics Params - Spawn particles
+            if (msg.physics_params) {
+                const pp = msg.physics_params;
+                if (pp.spawn_rate > 0) {
+                     const color = msg.visual_qualia ? msg.visual_qualia.color : '#ffffff';
+                     // Spawn multiple particles for visibility
+                     for(let i=0; i<pp.spawn_rate * 5; i++) {
+                        const px = width/2 + (Math.random()-0.5)*300;
+                        const py = height/2 + (Math.random()-0.5)*300;
+                        const p = new Particle(px, py, color);
+
+                        // Apply velocity bias
+                        if (pp.velocity_bias) {
+                            p.vx += pp.velocity_bias[0] * 5;
+                            p.vy += pp.velocity_bias[1] * 5;
+                        }
+                        particles.push(p);
+                     }
+                }
+            }
+        }
         ws.onerror = (e) => log("WebSocket Error");
 
         // --- Input ---
@@ -236,6 +293,15 @@
         }
 
         function animate() {
+            if (isNirodha) {
+                // Nirodha: Fade to Void Black
+                ctx.fillStyle = 'rgba(5, 5, 5, 0.05)';
+                ctx.fillRect(0, 0, width, height);
+                // Continue loop to finish the fade, but skip particle drawing
+                requestAnimationFrame(animate);
+                return;
+            }
+
             // Trail effect
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             ctx.fillRect(0,0,width,height);
