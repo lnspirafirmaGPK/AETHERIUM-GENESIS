@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
 import asyncio
+import os
 from typing import List
 
 # Adjust imports based on execution context (running from repo root)
@@ -10,6 +11,7 @@ try:
     from src.backend.core.lcl import LightControlLogic
     from src.backend.core.lightweight_ai import LightweightAI
     from src.backend.core.ai_adapter import MockAdapter
+    from src.backend.core.gemini_adapter import GeminiAdapter
     from src.backend.core.google_search_provider import GoogleSearchProvider
     from src.backend.core.search_schemas import SearchIntent
     from src.backend.core.light_schemas import LightIntent, LightAction
@@ -18,6 +20,7 @@ except ImportError:
     from core.lcl import LightControlLogic
     from core.lightweight_ai import LightweightAI
     from core.ai_adapter import MockAdapter
+    from core.gemini_adapter import GeminiAdapter
     from core.google_search_provider import GoogleSearchProvider
     from core.search_schemas import SearchIntent
     from core.light_schemas import LightIntent, LightAction
@@ -40,8 +43,15 @@ app.add_middleware(
 # Initialize Core Components
 lcl = LightControlLogic()
 lightweight_ai = LightweightAI()
-mock_adapter = MockAdapter()
 search_provider = GoogleSearchProvider()
+
+# AI Adapter Selection (The Bridge)
+if os.environ.get("GOOGLE_API_KEY"):
+    ai_adapter = GeminiAdapter()
+    logger.info("Core Online: Gemini Adapter Active")
+else:
+    ai_adapter = MockAdapter()
+    logger.warning("Core Offline: GOOGLE_API_KEY missing. Using Mock Adapter.")
 
 class ConnectionManager:
     def __init__(self):
@@ -90,7 +100,11 @@ async def physics_loop():
 
 @app.get("/")
 async def root():
-    return {"status": "Aetherium Genesis Backend Online", "modules": ["LCL", "LightweightAI", "MockAdapter"]}
+    adapter_name = ai_adapter.__class__.__name__
+    return {
+        "status": "Aetherium Genesis Backend Online",
+        "modules": ["LCL", "LightweightAI", adapter_name]
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -115,11 +129,11 @@ async def websocket_endpoint(websocket: WebSocket):
             intent = None
 
             if mode == "ai":
-                # AI Adapter Path
+                # AI Adapter Path (Gemini / Mock)
                 # Input expected to contain "text" for the prompt
                 prompt = user_input.get("text", "")
                 # Scene state is empty for now
-                intent = await mock_adapter.generate_intent(prompt, {})
+                intent = await ai_adapter.generate_intent(prompt, {})
                 logger.info(f"AI Adapter Generated Intent: {intent}")
             else:
                 # Lightweight AI Core Path (Rule-based)
@@ -129,7 +143,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if intent:
                 if isinstance(intent, SearchIntent):
-                    # Perform Search
+                    # Legacy Search Path (for direct voice commands if not routed to AI)
+                    # Note: GeminiAdapter handles search internally now, so this is mostly for "std" mode
                     logger.info(f"Executing Search: {intent.query}")
                     results = search_provider.search(intent.query)
 
@@ -152,16 +167,17 @@ async def websocket_endpoint(websocket: WebSocket):
                         target="GLOBAL",
                         intensity=intensity,
                         color_hint=color_hint,
-                        source="search_provider"
+                        source="search_provider",
+                        text_content=summary
                     )
 
                     # Process via LCL
                     instruction = lcl.process(light_intent)
                     if instruction:
-                        instruction.text_content = summary
                         await websocket.send_text(instruction.model_dump_json())
 
                 else:
+                    # Standard LightIntent (Manifest, Answer, Move, Spawn)
                     # Set source metadata
                     intent.source = "ai" if mode == "ai" else user_input.get("type", "unknown")
 
