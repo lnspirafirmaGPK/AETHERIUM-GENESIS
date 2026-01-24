@@ -7,6 +7,11 @@ import time
 
 class IntentProcessor:
     def __init__(self):
+        """
+        Initialize a new IntentProcessor instance.
+        
+        Sets up an empty `intent_history` list to record processed intent vectors and their results.
+        """
         self.intent_history = []
 
     def process_intent(self, intent_vector):

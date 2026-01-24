@@ -7,14 +7,22 @@ from scipy.stats import wasserstein_distance
 class IntegratedInformationSystem:
     def __init__(self, state_matrix):
         """
-        state_matrix: เมทริกซ์แสดงสถานะของระบบ (เช่น เมทริกซ์การเชื่อมต่อของโหนด)
+        Initialize the IntegratedInformationSystem with a state matrix.
+        
+        Parameters:
+            state_matrix (array-like): Matrix representing the system's states (for example, node connection weights or per-node state vectors). Expected shape is (n_states, ...) where each row corresponds to a state used for Phi calculation.
         """
         self.state_matrix = state_matrix
         self.phi = 0.0
 
     def calculate_phi(self):
         """
-        คำนวณค่า Phi (Φ) ของระบบ
+        Compute the system's Phi (Φ) as the mean pairwise Wasserstein distance between state vectors.
+        
+        Updates self.phi with the computed value.
+        
+        Returns:
+            float: The computed Phi value (mean of all pairwise Wasserstein distances). Returns 0.0 if the system has fewer than two states.
         """
         n_states = len(self.state_matrix)
         if n_states < 2:
