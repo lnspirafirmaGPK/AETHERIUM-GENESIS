@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
+import asyncio
+from typing import List
 
 # Adjust imports based on execution context (running from repo root)
 try:
@@ -34,14 +36,58 @@ lcl = LightControlLogic()
 lightweight_ai = LightweightAI()
 mock_adapter = MockAdapter()
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info("Client connected to Light Interaction Testbed")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info("Client disconnected")
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                # Handle disconnected clients gracefully if logic fails
+                logger.warning(f"Broadcast error: {e}")
+
+manager = ConnectionManager()
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(physics_loop())
+
+async def physics_loop():
+    logger.info("Starting Physics Loop")
+    while True:
+        try:
+            state = lcl.tick(0.05) # 20Hz -> 0.05s
+
+            # Wrap in a message type for frontend differentiation
+            # We construct manual JSON to wrap the Pydantic output
+            state_json = state.model_dump_json()
+            msg = f'{{"type": "STATE", "data": {state_json}}}'
+
+            await manager.broadcast(msg)
+        except Exception as e:
+            logger.error(f"Physics Loop Error: {e}")
+
+        await asyncio.sleep(0.05)
+
 @app.get("/")
 async def root():
     return {"status": "Aetherium Genesis Backend Online", "modules": ["LCL", "LightweightAI", "MockAdapter"]}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    logger.info("Client connected to Light Interaction Testbed")
+    await manager.connect(websocket)
 
     try:
         while True:
@@ -74,15 +120,22 @@ async def websocket_endpoint(websocket: WebSocket):
                 intent = lightweight_ai.resolve_intent(user_input)
                 logger.info(f"Lightweight Core Resolved Intent: {intent}")
 
-            # Pass through Light Control Logic (LCL)
-            instruction = lcl.process(intent)
-            logger.info(f"LCL Generated Instruction: {instruction}")
+            if intent:
+                # Set source metadata
+                intent.source = "ai" if mode == "ai" else user_input.get("type", "unknown")
 
-            # Send Instruction to Client
-            await websocket.send_text(instruction.model_dump_json())
+                # Pass through Light Control Logic (LCL)
+                instruction = lcl.process(intent)
+                logger.info(f"LCL Generated Instruction: {instruction}")
+
+                if instruction:
+                    # Send Instruction to Client
+                    await websocket.send_text(instruction.model_dump_json())
+            else:
+                logger.warning("No intent resolved")
 
     except WebSocketDisconnect:
-        logger.info("Client disconnected")
+        manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"Internal Error: {e}")
-        await websocket.close()
+        manager.disconnect(websocket)
