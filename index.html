@@ -334,9 +334,21 @@
                     const hasTarget = (state === 'MANIFESTATION' && this.targetType) || (state === 'EXTERNAL_CONTROL');
 
                     if (hasTarget) {
-                        const lerpFactor = 0.1 * (1 - (bias.inertia * 0.8));
-                        this.x += (this.targetX - this.x) * lerpFactor;
-                        this.y += (this.targetY - this.y) * lerpFactor;
+                        // Logenesis Force Physics (Spring/Elastic)
+                        const dx = this.targetX - this.x;
+                        const dy = this.targetY - this.y;
+
+                        // Accelerate towards target
+                        this.vx += dx * 0.05;
+                        this.vy += dy * 0.05;
+
+                        // Apply friction/damping
+                        this.vx *= 0.8;
+                        this.vy *= 0.8;
+
+                        this.x += this.vx;
+                        this.y += this.vy;
+
                         this.alpha = Math.min(0.9, this.alpha + 0.02);
                         this.color = this.targetColor || '#ffffff';
                     } else {

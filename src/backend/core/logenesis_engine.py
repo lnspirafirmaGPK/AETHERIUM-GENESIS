@@ -1,7 +1,8 @@
 import json
 import os
 import math
-from typing import Dict, Any, Optional
+import re
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from pydantic import ValidationError
 
@@ -10,6 +11,36 @@ from .logenesis_schemas import (
     VisualQualia, AudioQualia, PhysicsParams
 )
 from .light_schemas import LightIntent, LightAction
+from .formation_manager import FormationManager
+
+class LogenesisIntentParser:
+    """
+    Helper Class for LogenesisEngine.
+    Catches Explicit Commands before NLP processing.
+    """
+
+    def __init__(self):
+        self.patterns = {
+            'CIRCLE': [r'วงกลม', r'circle', r'ring', r'round'],
+            'SQUARE': [r'สี่เหลี่ยม', r'square', r'box', r'cube'],
+            'SPIRAL': [r'เกลียว', r'spiral', r'vortex'],
+            'LINE':   [r'เส้น', r'line', r'linear'],
+            'RESET':  [r'ยกเลิก', r'รีเซ็ต', r'reset', r'clear', r'normal', r'stop']
+        }
+
+    def parse_command(self, text: str) -> Tuple[Optional[str], float]:
+        """
+        Returns (ShapeType, Confidence)
+        If no command found, returns (None, 0.0)
+        """
+        text_lower = text.lower()
+
+        for shape, keywords in self.patterns.items():
+            for kw in keywords:
+                if re.search(kw, text_lower):
+                    return shape, 1.0
+
+        return None, 0.0
 
 class MockIntentExtractor:
     """
@@ -109,6 +140,8 @@ class LogenesisEngine:
         self.state = LogenesisState.VOID
         self.intent_extractor = MockIntentExtractor()
         self.state_store = StateStore()
+        self.formation_manager = FormationManager()
+        self.intent_parser = LogenesisIntentParser()
 
     def process(self, text: str, session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
         # Check for Nirodha Triggers (The "Silence Protocol")
@@ -148,8 +181,44 @@ class LogenesisEngine:
         if memory_index and not recalled_context:
             recall_proposal = self._check_recall(text, memory_index)
 
-        # 5. Physics / Shape Logic
-        light_intent = self._detect_physics_intent(text)
+        # 5. Physics / Shape Logic (Using New Parser)
+        shape, confidence = self.intent_parser.parse_command(text)
+        light_intent = None
+
+        if shape:
+            if shape == "RESET":
+                 # Reset Logic
+                 light_intent = LightIntent(
+                     action=LightAction.MANIFEST, # Or MOVE/RESET if supported, mapping to existing
+                     shape_name="nebula", # Reset to random
+                     formation_data=[], # Empty implies reset or LCL handles it? LCL handles nebula as scatter
+                     text_content="Resetting physics field."
+                 )
+                 # Actually, better to send a clear RESET or similar if available, or just scatter.
+                 # User snippet used: type="CONTROL", action="RESET".
+                 # But we must return LightIntent to bridge to LCL.
+                 # LCL supports LightAction.ERASE or just MANIFEST with 'scatter'.
+                 # Let's use 'scatter' (nebula) which is effectively a reset in this context.
+                 light_intent = LightIntent(
+                     action=LightAction.MANIFEST,
+                     shape_name="scatter",
+                     text_content="Dissipating formation."
+                 )
+            else:
+                 # Calculate coordinates directly as requested
+                 # 600 particles is a safe default (matching index.html)
+                 # Passing dummy width/height since we return normalized coords
+                 coords = self.formation_manager.calculate_formation(shape, 600, 1920, 1080)
+
+                 light_intent = LightIntent(
+                     action=LightAction.MANIFEST,
+                     shape_name=shape.lower(),
+                     formation_data=coords,
+                     text_content=f"Manifesting {shape}..."
+                 )
+        else:
+             # Fallback to legacy detection if new parser misses (e.g. movement commands)
+             light_intent = self._detect_physics_intent(text)
 
         # 6. Synthesize Text Response
         response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
