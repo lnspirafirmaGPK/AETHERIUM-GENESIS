@@ -328,13 +328,17 @@
                     this.alpha *= 0.98;
                     this.x += this.vx;
                     this.y += this.vy;
-                } else if (state === 'MANIFESTATION') {
-                    if (this.targetType) {
+                } else if (state === 'MANIFESTATION' || state === 'EXTERNAL_CONTROL') {
+                    // Use target seeking if we have a target set (either Face or External)
+                    // For EXTERNAL_CONTROL, we rely on targetX/Y being set by handleInstruction
+                    const hasTarget = (state === 'MANIFESTATION' && this.targetType) || (state === 'EXTERNAL_CONTROL');
+
+                    if (hasTarget) {
                         const lerpFactor = 0.1 * (1 - (bias.inertia * 0.8));
                         this.x += (this.targetX - this.x) * lerpFactor;
                         this.y += (this.targetY - this.y) * lerpFactor;
                         this.alpha = Math.min(0.9, this.alpha + 0.02);
-                        this.color = this.targetColor;
+                        this.color = this.targetColor || '#ffffff';
                     } else {
                         this.x += this.vx;
                         this.y += this.vy;
@@ -446,9 +450,8 @@
                             // Ignored: Physics sync
                         } else if (msg.type === 'LOGENESIS_RESPONSE') {
                             this.handleLogenesisResponse(msg);
-                        } else if (msg.action) {
-                             // Regular LCL action (fallback)
-                             this.log(`LCL: ${msg.action}`);
+                        } else if (msg.intent) {
+                             this.handleInstruction(msg);
                         }
                     } catch (e) {
                         console.error(e);
@@ -534,6 +537,45 @@
                 // Handle Recall Proposal
                 if (res.recall_proposal) {
                     this.showRecallModal(res.recall_proposal);
+                }
+            }
+
+            handleInstruction(instr) {
+                this.log(`LCL: ${instr.intent}`);
+
+                if (instr.intent === 'MANIFEST' || instr.intent === 'SPAWN') {
+                    if (instr.formation_data) {
+                        this.bus.publish('INTENT_CHANGE', { state: 'EXTERNAL_CONTROL', hex: '#FFFFFF', phi: 0.9 });
+
+                        // Shuffle particles to avoid ordering artifacts
+                        const shuffled = [...this.particles].sort(() => 0.5 - Math.random());
+
+                        instr.formation_data.forEach((pt, i) => {
+                            if (i < shuffled.length) {
+                                const p = shuffled[i];
+                                // pt is [x, y, color] normalized 0..1
+                                p.targetX = pt[0] * this.canvas.width;
+                                p.targetY = pt[1] * this.canvas.height;
+                                p.targetColor = pt[2] === 'default' ? '#ffffff' : pt[2];
+                                p.alpha = Math.max(p.alpha, 0.5);
+                            }
+                        });
+                    }
+                } else if (instr.intent === 'MOVE') {
+                     if (instr.vector) {
+                         const forceX = instr.vector[0] * 5.0;
+                         const forceY = instr.vector[1] * 5.0;
+                         this.particles.forEach(p => {
+                             p.vx += forceX;
+                             p.vy += forceY;
+                         });
+                         // Switch to Organic state so they move freely
+                         if (this.state === 'EXTERNAL_CONTROL' || this.state === 'MANIFESTATION') {
+                              this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#FFFFFF', phi: 0.5 });
+                         }
+                     }
+                } else if (instr.intent === 'ERASE') {
+                    this.particles.forEach(p => p.alpha = 0);
                 }
             }
 

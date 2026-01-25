@@ -9,6 +9,7 @@ from .logenesis_schemas import (
     LogenesisResponse, LogenesisState, IntentVector, ExpressionState,
     VisualQualia, AudioQualia, PhysicsParams
 )
+from .light_schemas import LightIntent, LightAction
 
 class MockIntentExtractor:
     """
@@ -147,7 +148,10 @@ class LogenesisEngine:
         if memory_index and not recalled_context:
             recall_proposal = self._check_recall(text, memory_index)
 
-        # 5. Synthesize Text Response
+        # 5. Physics / Shape Logic
+        light_intent = self._detect_physics_intent(text)
+
+        # 6. Synthesize Text Response
         response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
 
         return LogenesisResponse(
@@ -157,7 +161,8 @@ class LogenesisEngine:
             audio_qualia=audio,
             physics_params=physics,
             intent_debug=drifted_vector, # Visualize the drifted vector, not just raw input
-            recall_proposal=recall_proposal
+            recall_proposal=recall_proposal,
+            light_intent=light_intent
         )
 
     def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
@@ -233,6 +238,52 @@ class LogenesisEngine:
             inertia=effective_inertia, # Store current effective inertia for debugging
             last_updated=datetime.now()
         )
+
+    def _detect_physics_intent(self, text: str) -> Optional[LightIntent]:
+        """
+        Detects explicit physics/shape commands in text.
+        """
+        text = text.lower()
+
+        # Shape Manifestation
+        shape_map = {
+            "circle": "circle", "ring": "circle", "loop": "circle", "วงกลม": "circle",
+            "square": "square", "box": "square", "สี่เหลี่ยม": "square",
+            "line": "line", "row": "line", "เส้น": "line",
+            "vertical": "vertical", "column": "vertical", "แนวตั้ง": "vertical",
+            "spiral": "spiral", "vortex": "spiral", "swirl": "spiral", "ก้นหอย": "spiral",
+            "cross": "cross", "x": "cross", "กากบาท": "cross",
+            "scatter": "scatter", "explode": "scatter", "burst": "scatter", "กระจาย": "scatter",
+            "gather": "orb", "assemble": "orb", "group": "orb", "รวม": "orb"
+        }
+
+        for keyword, shape in shape_map.items():
+            if keyword in text:
+                return LightIntent(
+                    action=LightAction.MANIFEST,
+                    shape_name=shape,
+                    text_content=f"Manifesting {shape} formation"
+                )
+
+        # Movement Vectors
+        move_map = {
+            "left": (-1.0, 0.0), "ซ้าย": (-1.0, 0.0),
+            "right": (1.0, 0.0), "ขวา": (1.0, 0.0),
+            "up": (0.0, -1.0), "บน": (0.0, -1.0),
+            "down": (0.0, 1.0), "ล่าง": (0.0, 1.0)
+        }
+
+        # Check for move/go + direction
+        if any(w in text for w in ["move", "go", "shift", "slide", "ไป", "ย้าย", "เลื่อน"]):
+            for keyword, vec in move_map.items():
+                if keyword in text:
+                    return LightIntent(
+                        action=LightAction.MOVE,
+                        vector=vec,
+                        text_content=f"Applying directional force: {keyword}"
+                    )
+
+        return None
 
     def enter_nirodha(self) -> LogenesisResponse:
         """

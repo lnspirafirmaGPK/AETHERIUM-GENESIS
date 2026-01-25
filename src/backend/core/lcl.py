@@ -5,6 +5,7 @@ from collections import deque
 from .light_schemas import (
     LightIntent, LightInstruction, LightAction, LightEntity, LightState, PriorityLevel
 )
+from .formation_manager import FormationManager
 
 class LightControlLogic:
     """
@@ -213,6 +214,12 @@ class LightControlLogic:
              )
 
         elif intent.action == LightAction.MANIFEST:
+            # Generate formation data if shape name is provided but no raw data
+            if not intent.formation_data and intent.shape_name:
+                count = len(self.entities) if self.entities else 50
+                count = max(count, 30) # Ensure minimal density
+                intent.formation_data = FormationManager.get_formation(intent.shape_name, count)
+
             if intent.formation_data:
                 # Match particles to targets
                 # If we need more particles, spawn them
@@ -246,7 +253,8 @@ class LightControlLogic:
 
             instruction = LightInstruction(
                 intent=LightAction.MANIFEST,
-                text_content=intent.text_content
+                text_content=intent.text_content,
+                formation_data=intent.formation_data
             )
 
         return instruction

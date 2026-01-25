@@ -34,6 +34,8 @@ class LightIntent(BaseModel):
     # Added for MANIFEST intent payload (list of particle targets)
     # Format: [(x, y, color_hex), ...]
     formation_data: Optional[List[Tuple[float, float, str]]] = None
+    # Added for high-level shape requests (e.g. "circle")
+    shape_name: Optional[str] = None
     text_content: Optional[str] = None
 
 class LightInstruction(BaseModel):
@@ -47,6 +49,8 @@ class LightInstruction(BaseModel):
     motion: Optional[str] = None
     color_profile: Optional[str] = None
     text_content: Optional[str] = None
+    # Added to carry calculated points to the client
+    formation_data: Optional[List[Tuple[float, float, str]]] = None
 
 class LightEntity(BaseModel):
     id: str
