@@ -13,3 +13,4 @@ torch
 diffusers
 transformers
 accelerate
+websockets

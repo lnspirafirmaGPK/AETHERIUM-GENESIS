@@ -8,6 +8,14 @@ class FormationManager:
     Coordinates are normalized (0.0 to 1.0).
     """
 
+    def calculate_formation(self, shape_type: str, particle_count: int, canvas_width: int, canvas_height: int) -> List[Tuple[float, float, str]]:
+        """
+        Adapter method for pixel-based calls.
+        Returns NORMALIZED coordinates (0.0-1.0) regardless of input resolution,
+        to maintain compatibility with the frontend renderer which scales them.
+        """
+        return self.get_formation(shape_type, particle_count)
+
     @staticmethod
     def get_formation(shape: str, count: int, center: Tuple[float, float] = (0.5, 0.5), scale: float = 0.3) -> List[Tuple[float, float, str]]:
         """

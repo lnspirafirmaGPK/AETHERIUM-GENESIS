@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import json
 import logging
 import asyncio
@@ -41,6 +42,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (for PWA/Frontend)
+app.mount("/static", StaticFiles(directory="."), name="static")
 
 # Initialize Core Components
 lcl = LightControlLogic()
