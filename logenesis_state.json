@@ -1,14 +1,14 @@
 {
-  "global": {
+  "global_session": {
     "current_vector": {
-      "epistemic_need": 0.25577387199999996,
-      "subjective_weight": 0.17939699200000003,
+      "epistemic_need": 0.30406196799999996,
+      "subjective_weight": 0.4589055999999999,
       "decision_urgency": 0.1,
-      "precision_required": 0.25299999999999995,
+      "precision_required": 0.184359304,
       "raw_embedding": null
     },
-    "velocity": 0.1207289056577075,
+    "velocity": 0.09908936481634452,
     "inertia": 0.8200000000000001,
-    "last_updated": "2026-01-25T06:36:33.406505"
+    "last_updated": "2026-01-25T07:39:25.738307"
   }
 }
