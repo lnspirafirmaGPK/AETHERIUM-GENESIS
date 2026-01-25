@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Aetherium Genesis — Actuator UI</title>
+<style>
+  :root{--bg:#000;--accent:#ffb86b;--accent2:#7befff}
+  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,Segoe UI,Roboto}
+
+  #viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  canvas{position:absolute;inset:0;display:block}
+  .ui-layer{position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;pointer-events:none}
+  .actuator{pointer-events:auto;background:linear-gradient(135deg,var(--accent),#ff6b6b);border-radius:999px;padding:14px 22px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(255,120,60,0.12);border:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none}
+  .actuator .dot{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 12px rgba(255,200,120,0.9)}
+  .label{font-size:14px;font-weight:600;color:#050505}
+  .sub{font-size:11px;color:rgba(5,5,5,0.6);opacity:0.9}
+  .status{position:absolute;bottom:110px;left:50%;transform:translateX(-50%);font-size:13px;color:rgba(255,255,255,0.6);pointer-events:none}
+  @media (max-width:520px){ .actuator{padding:10px 16px} .label{font-size:13px} .status{bottom:90px} }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <canvas id="scene"></canvas>
+  <div class="status" id="status">Idle</div>
+  <div class="ui-layer">
+    <div id="actuator" class="actuator" role="button" aria-pressed="false" aria-label="Start voice interaction">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div class="label">Touch to speak</div>
+        <div class="sub">สัมผัสเพื่อสนทนา</div>
+      </div>
+      <div class="dot" id="act-dot"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Configuration */
+const WS_URL = 'ws://localhost:8000/ws';
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d', { alpha: true });
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
+
+/* State */
+const State = { IDLE:'idle', LISTENING:'listening', PROCESSING:'processing', RESONATING:'resonating' };
+let currentState = State.IDLE;
+const statusEl = document.getElementById('status');
+const actuator = document.getElementById('actuator');
+const actDot = document.getElementById('act-dot');
+
+function setState(s){
+  currentState = s;
+  statusEl.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  actuator.setAttribute('aria-pressed', s !== State.IDLE);
+  if(s === State.IDLE){ actDot.style.transform = 'scale(1)'; actDot.style.boxShadow = '0 0 12px rgba(255,200,120,0.9)'; }
+  if(s === State.LISTENING){ actDot.style.transform = 'scale(1.4)'; actDot.style.boxShadow = '0 0 28px rgba(123,239,255,0.95)'; }
+  if(s === State.PROCESSING){ actDot.style.transform = 'scale(1.1)'; actDot.style.boxShadow = '0 0 18px rgba(255,140,80,0.9)'; }
+  if(s === State.RESONATING){ actDot.style.transform = 'scale(0.9)'; actDot.style.boxShadow = '0 0 40px rgba(255,255,255,0.95)'; }
+}
+
+/* Particles */
+const PARTICLE_COUNT = 900;
+const particles = [];
+for(let i=0;i<PARTICLE_COUNT;i++){
+  particles.push({
+    x: Math.random()*width,
+    y: Math.random()*height,
+    vx: (Math.random()-0.5)*0.6,
+    vy: (Math.random()-0.5)*0.6,
+    size: Math.random()*1.6 + 0.6,
+    hue: Math.random()*360,
+    target: null
+  });
+}
+let globalPulse = 0;
+let colorShift = 0;
+
+function renderParticles(){
+  ctx.clearRect(0,0,width,height);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(0,0,width,height);
+  for(const p of particles){
+    p.vx += (Math.random()-0.5)*0.08;
+    p.vy += (Math.random()-0.5)*0.08;
+    if(currentState === State.RESONATING && p.target){
+      const dx = p.target.x - p.x;
+      const dy = p.target.y - p.y;
+      p.vx += dx * 0.002 * (1 + globalPulse);
+      p.vy += dy * 0.002 * (1 + globalPulse);
+    } else {
+      p.vx += (width/2 - p.x) * 0.00001;
+      p.vy += (height/2 - p.y) * 0.00001;
+    }
+    p.x += p.vx; p.y += p.vy;
+    if(p.x < 0) p.x = width; if(p.x > width) p.x = 0;
+    if(p.y < 0) p.y = height; if(p.y > height) p.y = 0;
+    const hue = (p.hue + colorShift) % 360;
+    const alpha = Math.min(0.95, 0.08 + Math.hypot(p.vx,p.vy)*0.6 + globalPulse*0.25);
+    ctx.fillStyle = `hsla(${hue}, 85%, 60%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * (1 + globalPulse*0.6), 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+/* Audio capture & simple VAD */
+let audioCtx, analyser, dataArray, sourceNode, mediaStream;
+let listeningStart = 0;
+let vadTimer = null;
+
+async function startListening(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') await audioCtx.resume();
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(err){
+    console.error('Microphone access denied', err);
+    return;
+  }
+  sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  sourceNode.connect(analyser);
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+  setState(State.LISTENING);
+  listeningStart = performance.now();
+  vadLoop();
+  sendWS({ type:'INTENT_START', meta:{ ts: Date.now() } });
+}
+
+function stopListening(){
+  if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+  if(sourceNode){ sourceNode.disconnect(); sourceNode = null; }
+  if(analyser){ analyser.disconnect(); analyser = null; }
+  setState(State.PROCESSING);
+  sendWS({ type:'INTENT_END', meta:{ duration: performance.now() - listeningStart } });
+}
+
+/* energy-based VAD */
+function vadLoop(){
+  if(!analyser) return;
+  analyser.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for(let i=0;i<dataArray.length;i++){
+    const v = (dataArray[i] - 128) / 128;
+    sum += v*v;
+  }
+  const rms = Math.sqrt(sum / dataArray.length);
+  globalPulse = Math.min(1, rms * 6);
+  if(rms > 0.02){
+    if(vadTimer){ clearTimeout(vadTimer); vadTimer = null; }
+  } else {
+    if(!vadTimer){
+      vadTimer = setTimeout(()=> {
+        stopListening();
+      }, 700);
+    }
+  }
+  requestAnimationFrame(vadLoop);
+}
+
+/* WebSocket AetherBus */
+let ws;
+function connectWS(){
+  ws = new WebSocket(WS_URL);
+  ws.addEventListener('open', ()=> console.log('AetherBus connected'));
+  ws.addEventListener('message', (ev)=> {
+    try {
+      const msg = JSON.parse(ev.data);
+      handleAetherMessage(msg);
+    } catch(e){ console.error('Invalid WS message', e); }
+  });
+  ws.addEventListener('close', ()=> setTimeout(connectWS, 2000));
+}
+connectWS();
+
+function sendWS(payload){
+  if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+
+/* Handle server messages (supports new and legacy shapes) */
+function handleAetherMessage(msg){
+  // new UI messages
+  if(msg.type === 'VISUAL_PARAMS'){
+    applyVisualParams(msg.params || {});
+  } else if(msg.type === 'AI_SPEAK'){
+    triggerAIResponse(msg.text || '');
+  } else if(msg.type === 'MANIFEST'){
+    setParticleTargetsFromCoords(msg.coords || []);
+    setState(State.RESONATING);
+  } else if(msg.type === 'LOGENESIS_RESPONSE' || msg.type === 'LightInstruction'){
+    // legacy mapping: convert to VISUAL_PARAMS
+    const params = legacyToVisual(msg);
+    applyVisualParams(params);
+  } else {
+    console.log('Unhandled message', msg);
+  }
+}
+
+function legacyToVisual(msg){
+  // simple mapping for legacy messages (server simulation)
+  return {
+    colorShift: (msg.colorShift || 0),
+    targets: msg.coords || []
+  };
+}
+
+function applyVisualParams(params){
+  colorShift = (params.colorShift || 0) * 30;
+  if(params.targets && params.targets.length) setParticleTargetsFromCoords(params.targets);
+  setState(State.RESONATING);
+}
+
+function setParticleTargetsFromCoords(coords){
+  for(let i=0;i<particles.length;i++){
+    const c = coords[i % coords.length];
+    particles[i].target = { x: (c.x || 0.5) * width, y: (c.y || 0.5) * height };
+  }
+}
+
+function triggerAIResponse(text){
+  if('speechSynthesis' in window){
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'th-TH';
+    utter.onstart = ()=> { setState(State.RESONATING); globalPulse = 0.9; colorShift += 60; };
+    utter.onend = ()=> { globalPulse = 0; setTimeout(()=> setState(State.IDLE), 600); };
+    speechSynthesis.speak(utter);
+  } else {
+    setState(State.RESONATING);
+    setTimeout(()=> setState(State.IDLE), 1200);
+  }
+}
+
+/* Actuator interactions */
+actuator.addEventListener('pointerdown', async (e) => {
+  e.preventDefault();
+  if(currentState === State.IDLE){
+    await startListening();
+  } else if(currentState === State.LISTENING){
+    stopListening();
+    sendWS({ type:'INTENT_MANUAL_STOP' });
+  } else if(currentState === State.RESONATING){
+    setState(State.IDLE);
+    sendWS({ type:'RESET' });
+  }
+});
+
+/* Resize & loop */
+window.addEventListener('resize', ()=> { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; });
+function loop(){
+  globalPulse = Math.max(0, globalPulse * 0.96 - 0.002);
+  colorShift = (colorShift + 0.05) % 360;
+  renderParticles();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
