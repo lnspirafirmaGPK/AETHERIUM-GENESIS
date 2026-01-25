@@ -109,7 +109,7 @@ class LogenesisEngine:
         self.intent_extractor = MockIntentExtractor()
         self.state_store = StateStore()
 
-    def process(self, text: str, session_id: str = "global") -> LogenesisResponse:
+    def process(self, text: str, session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
         # Check for Nirodha Triggers (The "Silence Protocol")
         if any(w in text.lower() for w in ["sleep", "stop", "rest", "retreat", "bye", "enough", "พอ", "พัก"]):
             return self.enter_nirodha()
@@ -132,8 +132,13 @@ class LogenesisEngine:
         audio = self._calculate_audio(drifted_vector)
         physics = self._calculate_physics(drifted_vector)
 
-        # 4. Synthesize Text Response
-        response_text = self._synthesize_text(drifted_vector, input_intent)
+        # 4. Recall Logic
+        recall_proposal = None
+        if memory_index and not recalled_context:
+            recall_proposal = self._check_recall(text, memory_index)
+
+        # 5. Synthesize Text Response
+        response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
 
         return LogenesisResponse(
             state=self.state,
@@ -141,8 +146,36 @@ class LogenesisEngine:
             visual_qualia=qualia,
             audio_qualia=audio,
             physics_params=physics,
-            intent_debug=drifted_vector # Visualize the drifted vector, not just raw input
+            intent_debug=drifted_vector, # Visualize the drifted vector, not just raw input
+            recall_proposal=recall_proposal
         )
+
+    def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
+        from .logenesis_schemas import RecallProposal
+
+        text = text.lower()
+        for item in memory_index:
+            # Simple keyword matching for prototype
+            # item is expected to be a dict (from client JSON)
+            topic = item.get('topic', '').lower()
+            if topic and topic in text:
+                # Detect language for the proposal
+                is_thai = any(char > '\u0e00' for char in text)
+
+                if is_thai:
+                    question = f"คุณเคยกล่าวถึง '{item.get('topic')}' มาก่อน ต้องการให้เชื่อมโยงบริบทเดิมหรือไม่?"
+                    reasoning = f"พบหัวข้อ '{item.get('topic')}' ในประวัติความทรงจำ"
+                else:
+                    question = f"You mentioned '{item.get('topic')}' previously. Shall I recall that context?"
+                    reasoning = f"Detected overlap with memory topic: {item.get('topic')}"
+
+                return RecallProposal(
+                    memory_id=item.get('id'),
+                    topic=item.get('topic'),
+                    reasoning=reasoning,
+                    question=question
+                )
+        return None
 
     def _drift_state(self, current_state: ExpressionState, input_intent: IntentVector) -> ExpressionState:
         """
@@ -297,11 +330,13 @@ class LogenesisEngine:
             decay_rate=max(0.001, decay)
         )
 
-    def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector) -> str:
+    def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector, recalled_context: Optional[str] = None) -> str:
         """
         Generates verbal response based on the DRIFTED vector.
         This ensures the tone changes gradually.
         """
+        if recalled_context:
+            return f"[MEMORY LINKED] Context integrated: {recalled_context[:50]}... Proceeding with enhanced context."
 
         # Tone Analysis based on vector
         is_urgent = vector.decision_urgency > 0.5
