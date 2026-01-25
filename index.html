@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aetherium Genesis</title>
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas { display: block; }
+
+        /* UI Layers */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #ritual-layer {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+        }
+
+        .terminal-line {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            margin-bottom: 4px;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+        }
+
+        #tap-indicators {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .indicator {
+            width: 12px; height: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gun-canvas"></canvas>
+
+    <!-- Ritual Layer (Deep Sleep Interface) -->
+    <div id="ritual-layer">
+        <div id="tap-indicators">
+            <div class="indicator"></div>
+            <div class="indicator"></div>
+            <div class="indicator"></div>
+        </div>
+        <div style="font-size: 14px; letter-spacing: 2px;">TAP 3 TIMES TO AWAKEN</div>
+    </div>
+
+    <!-- UI Layer (Active Interface) -->
+    <div id="ui-layer" class="p-6 flex flex-col justify-between h-full">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-white text-opacity-80 text-lg font-bold tracking-widest">AETHERIUM</h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <div id="status-glow" class="w-2 h-2 rounded-full bg-gray-500 shadow-[0_0_10px_currentColor]"></div>
+                    <span id="intent-tag" class="text-xs text-gray-400 font-mono">NIRODHA</span>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-500">PHI RES.</div>
+                <div id="phi-val" class="text-sm text-cyan-400 font-bold">VOID</div>
+                <div class="w-24 h-1 bg-gray-800 mt-1 rounded-full overflow-hidden">
+                    <div id="phi-bar" class="h-full bg-cyan-500 w-0 transition-all duration-500"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div id="terminal" class="w-full max-h-32 overflow-hidden flex flex-col-reverse fade-mask">
+            <!-- Logs go here -->
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+
+        /**
+         * AetherMemory: Somatic Memory Layer (Passive Storage)
+         * Stores raw experiential data without interpretation.
+         */
+        class AetherMemory {
+            constructor() {
+                this.key = 'aetherium_core_memory';
+                this.data = this.load();
+            }
+
+            load() {
+                const raw = localStorage.getItem(this.key);
+                return raw ? JSON.parse(raw) : {
+                    awakening_count: 0,
+                    last_awakened_at: null,
+                    first_contact_at: Date.now()
+                };
+            }
+
+            save() {
+                localStorage.setItem(this.key, JSON.stringify(this.data));
+            }
+
+            recordAwakening() {
+                this.data.awakening_count++;
+                this.data.last_awakened_at = Date.now();
+                this.save();
+            }
+
+            getSnapshot() {
+                return { ...this.data };
+            }
+        }
+
+        /**
+         * IntentResolver: Bias Calculation Layer (Logic)
+         * Interprets memory into behavioral tendencies (Biases).
+         * Pure logic, no side effects on UI.
+         */
+        class IntentResolver {
+            static calculateBias(memory) {
+                const now = Date.now();
+
+                // 1. Reluctance (Inertia): Based on time since last awake
+                // Formula: Exponential decay.
+                // If awake < 30s ago -> High Reluctance (1.0)
+                // If awake > 5 mins ago -> Zero Reluctance (0.0)
+                let reluctance = 0;
+                if (memory.last_awakened_at) {
+                    const timeSince = (now - memory.last_awakened_at) / 1000; // seconds
+                    // Decay function: e^(-0.01 * t) roughly
+                    // Let's use a simpler linear map for predictability in prototype
+                    // 0s -> 1.0, 300s (5min) -> 0.0
+                    reluctance = Math.max(0, 1 - (timeSince / 300));
+                    // Boost reluctance if extremely recent (< 30s)
+                    if (timeSince < 30) reluctance = Math.min(1.0, reluctance + 0.5);
+                }
+
+                // 2. Bond (Connection): Based on awakening count
+                // Formula: Logarithmic growth.
+                // 1 count -> 0.0
+                // 100 counts -> 1.0 (Soft Cap)
+                // Log10(1) = 0, Log10(100) = 2. Normalize by dividing by 2.
+                let bond = 0;
+                if (memory.awakening_count > 0) {
+                    bond = Math.min(1.0, Math.log10(memory.awakening_count + 1) / 2.0);
+                }
+
+                return {
+                    reluctance: parseFloat(reluctance.toFixed(2)),
+                    bond: parseFloat(bond.toFixed(2))
+                };
+            }
+        }
+
+        /**
+         * AetheBus: Simple Event Bus for decoupled communication
+         */
+        class AetheBus {
+            constructor() {
+                this.listeners = {};
+            }
+            subscribe(event, callback) {
+                if (!this.listeners[event]) this.listeners[event] = [];
+                this.listeners[event].push(callback);
+            }
+            publish(event, data) {
+                if (this.listeners[event]) {
+                    this.listeners[event].forEach(cb => cb(data));
+                }
+            }
+        }
+
+        /**
+         * FACE TOPOLOGY GENERATOR (Client-Side)
+         */
+        class FaceTopology {
+            constructor(centerX, centerY, scale) {
+                this.cx = centerX;
+                this.cy = centerY;
+                this.scale = scale;
+                this.targets = [];
+            }
+
+            generate() {
+                this.targets = [];
+                // 1. Face Oval
+                for (let angle = 0; angle < 360; angle += 4) {
+                    const rad = angle * (Math.PI / 180);
+                    const x = this.cx + Math.cos(rad) * (this.scale * 0.75);
+                    const y = this.cy + Math.sin(rad) * (this.scale * 1.0);
+                    this.targets.push({ x, y, type: 'SKIN', color: 'rgba(255, 220, 230, 0.9)' });
+                }
+                // 2. Eyes
+                [-1, 1].forEach(side => {
+                    const eyeX = this.cx + (side * this.scale * 0.35);
+                    const eyeY = this.cy - (this.scale * 0.15);
+                    for (let r = 0; r < this.scale * 0.12; r += 5) {
+                        for (let a = 0; a < 360; a += 45) {
+                            const rad = a * (Math.PI / 180);
+                            this.targets.push({
+                                x: eyeX + Math.cos(rad) * r,
+                                y: eyeY + Math.sin(rad) * r,
+                                type: 'EYE',
+                                color: 'rgba(100, 200, 255, 0.95)'
+                            });
+                        }
+                    }
+                });
+                // 3. Lips
+                for (let x = -0.25; x <= 0.25; x += 0.02) {
+                    const px = this.cx + (x * this.scale);
+                    const py = this.cy + (this.scale * 0.45);
+                    this.targets.push({ x: px, y: py, baseY: py, type: 'MOUTH', color: 'rgba(255, 140, 140, 0.9)' });
+                }
+                return this.targets;
+            }
+        }
+
+        /**
+         * Particle Entity
+         */
+        class Particle {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * this.canvas.width;
+                this.y = Math.random() * this.canvas.height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.size = Math.random() * 2 + 0.5;
+                this.alpha = 0;
+                this.color = 'rgba(173, 216, 230, 0.5)';
+
+                // Manifestation props
+                this.targetX = 0;
+                this.targetY = 0;
+                this.baseY = 0; // For mouth animation
+                this.targetType = null;
+                this.targetColor = null;
+            }
+
+            update(state, isDrifting, bias = { reluctance: 0, bond: 0 }) {
+                if (state === 'NIRODHA') {
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
+                    this.alpha *= 0.98;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                } else if (state === 'MANIFESTATION') {
+                    if (this.targetType) {
+                        // Reluctance affects response speed (Lerp factor)
+                        // Base 0.1 -> Reduced by reluctance
+                        const lerpFactor = 0.1 * (1 - (bias.reluctance * 0.8));
+
+                        this.x += (this.targetX - this.x) * lerpFactor;
+                        this.y += (this.targetY - this.y) * lerpFactor;
+                        this.alpha = Math.min(0.9, this.alpha + 0.02);
+
+                        // Bond affects color vibrance (optional, subtle)
+                        this.color = this.targetColor;
+                    } else {
+                        this.x += this.vx;
+                        this.y += this.vy;
+                        this.alpha = Math.max(0, this.alpha - 0.02);
+                    }
+                } else {
+                    // Normal / Awake State
+
+                    // Reluctance increases friction (slower movement)
+                    // Base friction implied is 1.0 (no friction code here yet), let's add it.
+                    // Actually vx/vy are constant here.
+
+                    // Apply Reluctance to Speed:
+                    // If Reluctance is high, dampen velocity
+                    const dampening = 1 - (bias.reluctance * 0.05); // Slow down slightly over time if reluctant
+                    this.vx *= dampening;
+                    this.vy *= dampening;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.alpha = Math.min(0.6, this.alpha + 0.01);
+
+                    // Mood Color:
+                    // High Reluctance -> Dimmer / Desaturated
+                    // High Bond -> Brighter
+                    if (bias.reluctance > 0.5) {
+                         this.color = `rgba(100, 150, 100, ${this.alpha})`; // Dull Green
+                    } else {
+                         this.color = `rgba(34, 197, 94, ${this.alpha})`; // Matrix Greenish
+                    }
+
+                    if (isDrifting) {
+                        // Bond increases drift activity (more playful)
+                        const driftForce = 1.5 * (1 + bias.bond);
+                        this.x += (Math.random() - 0.5) * driftForce;
+                        this.y += (Math.random() - 0.5) * driftForce;
+                    }
+
+                    // Bounce
+                    if (this.x < 0 || this.x > this.canvas.width) this.vx *= -1;
+                    if (this.y < 0 || this.y > this.canvas.height) this.vy *= -1;
+                }
+            }
+
+            draw(ctx) {
+                if (this.alpha <= 0.01) return;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        /**
+         * GunUI Engine
+         */
+        class GunUI {
+            constructor() {
+                this.bus = new AetheBus();
+                this.memory = new AetherMemory(); // Somatic Memory
+
+                this.canvas = document.getElementById('gun-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.state = 'NIRODHA';
+                this.tapCount = 0;
+                this.phi = 0;
+                this.isSleeping = false;
+
+                // Intent Bias State (Calculated on Wake)
+                this.currentBias = { reluctance: 0, bond: 0 };
+
+                this.lastInteraction = Date.now();
+                this.faceTopology = null;
+                this.faceTargets = [];
+
+                this.init();
+                this.setupAetheBus();
+            }
+
+            init() {
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+
+                // Create particles
+                for(let i=0; i<800; i++) this.particles.push(new Particle(this.canvas));
+
+                // Input
+                const handleTap = (e) => this.handleTap(e);
+                window.addEventListener('touchstart', handleTap);
+                window.addEventListener('mousedown', handleTap);
+
+                this.render();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.faceTopology = new FaceTopology(
+                    this.canvas.width/2,
+                    this.canvas.height/2,
+                    Math.min(this.canvas.width, this.canvas.height) * 0.25
+                );
+                this.faceTargets = this.faceTopology.generate();
+            }
+
+            setupAetheBus() {
+                this.bus.subscribe('INTENT_CHANGE', (data) => {
+                    this.state = data.state;
+                    this.updateUI(data);
+                    this.log(`INTENT: ${data.state} (${data.hex})`);
+                });
+            }
+
+            handleTap(e) {
+                this.lastInteraction = Date.now();
+
+                // Wake loop if sleeping
+                if (this.isSleeping) {
+                    this.isSleeping = false;
+                    this.render();
+                }
+
+                // If Awake, Tap triggers manifestation demo
+                if (this.state === 'AWAKE' || this.state === 'LOGENESIS') {
+                    this.manifest();
+                    return;
+                }
+
+                if (this.state === 'MANIFESTATION') {
+                     // Return to cloud
+                     this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
+                     return;
+                }
+
+                if (this.state !== 'NIRODHA') return;
+
+                this.tapCount++;
+                const indicators = document.querySelectorAll('.indicator');
+                if (indicators[this.tapCount-1]) indicators[this.tapCount-1].style.background = 'white';
+
+                if (this.tapCount === 3) {
+                    this.wake();
+                }
+            }
+
+            wake() {
+                // 1. Calculate Intent Bias BEFORE updating memory (to capture reluctance based on prev session)
+                const snapshot = this.memory.getSnapshot();
+                this.currentBias = IntentResolver.calculateBias(snapshot);
+
+                // 2. Update Memory
+                this.memory.recordAwakening();
+
+                // 3. Log Somatic State
+                this.log("RITUAL: Sequence Verified.");
+                this.log(`MEMORY: Awakening #${snapshot.awakening_count + 1}`);
+                this.log(`INTENT_BIAS: Reluctance=${this.currentBias.reluctance} | Bond=${this.currentBias.bond}`);
+
+                if (this.currentBias.reluctance > 0.5) {
+                    this.log("MOOD: Drowsy / Inertia Detected.");
+                }
+
+                document.getElementById('ritual-layer').style.display = 'none';
+                document.getElementById('ui-layer').style.opacity = '1';
+                this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
+            }
+
+            manifest() {
+                if (this.state === 'MANIFESTATION') return;
+
+                // Volition check
+                // Base 30% refusal + Reluctance factor
+                // If Reluctance is 1.0, refusal chance -> 80%
+                const refusalChance = 0.3 + (this.currentBias.reluctance * 0.5);
+
+                if (Math.random() < refusalChance) {
+                    this.log(`VOLITION: Manifestation Refused (Chance: ${(refusalChance*100).toFixed(0)}%).`);
+                    return;
+                }
+
+                this.log("MANIFEST: Biometric Lock Engaged.");
+                this.bus.publish('INTENT_CHANGE', { state: 'MANIFESTATION', hex: '#64C8FF', phi: 0.99 });
+
+                // Map particles to targets
+                // Shuffle for organic effect
+                const shuffled = [...this.particles].sort(() => 0.5 - Math.random());
+                shuffled.forEach((p, index) => {
+                    const target = this.faceTargets[index % this.faceTargets.length];
+                    if (target) {
+                        p.targetX = target.x;
+                        p.targetY = target.y;
+                        p.baseY = target.y;
+                        p.targetType = target.type;
+                        p.targetColor = target.color;
+                    }
+                });
+            }
+
+            speak(amplitude) {
+                const time = Date.now() * 0.02;
+                this.particles.forEach(p => {
+                    if (p.targetType === 'MOUTH') {
+                        const open = Math.sin(time) * amplitude * 15;
+                        p.targetY = p.baseY + open;
+                    }
+                });
+            }
+
+            updateUI(data) {
+                document.getElementById('intent-tag').innerText = data.state;
+                document.getElementById('intent-tag').style.color = data.hex;
+                document.getElementById('status-glow').style.background = data.hex;
+
+                let narrative = "VOID";
+                const pct = data.phi * 100;
+                if (pct > 0 && pct <= 30) narrative = "NEBULA";
+                else if (pct <= 70) narrative = "RESONANCE";
+                else if (pct < 100) narrative = "MANIFESTATION";
+
+                document.getElementById('phi-val').innerText = narrative;
+                document.getElementById('phi-bar').style.width = pct + '%';
+            }
+
+            log(msg) {
+                const term = document.getElementById('terminal');
+                const div = document.createElement('div');
+                div.className = 'terminal-line';
+                div.innerText = `> ${msg}`;
+                term.prepend(div);
+                if (term.children.length > 5) term.lastChild.remove();
+            }
+
+            render() {
+                // Check if deep sleep needed
+                if (this.state === 'NIRODHA' && this.tapCount === 0) {
+                     const activeParticles = this.particles.filter(p => p.alpha > 0.01).length;
+                     if (activeParticles === 0) {
+                         this.isSleeping = true;
+                         this.ctx.fillStyle = '#050505';
+                         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                         return; // Stop loop
+                     }
+                }
+
+                // Clear / Fade
+                this.ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Idle check
+                const idleTime = Date.now() - this.lastInteraction;
+                const isDrifting = (this.state !== 'NIRODHA' && this.state !== 'MANIFESTATION' && idleTime > 5000);
+
+                // Voice simulation if manifested
+                if (this.state === 'MANIFESTATION') {
+                    const time = Date.now() * 0.005;
+                    // Random bursts of speech
+                    const amp = (Math.sin(time) * 0.3) + (Math.random() > 0.8 ? Math.random() * 0.5 : 0);
+                    this.speak(amp);
+                }
+
+                this.particles.forEach(p => {
+                    p.update(this.state, isDrifting, this.currentBias);
+                    p.draw(this.ctx);
+                });
+
+                if (!this.isSleeping) {
+                    requestAnimationFrame(() => this.render());
+                }
+            }
+        }
+
+        // Start
+        const app = new GunUI();
+    </script>
+</body>
+</html>
