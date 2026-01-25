@@ -25,8 +25,10 @@ class VisualSpecifics(BaseModel):
 
 class VisualParameters(BaseModel):
     """
-    The 'Intent Vector' structure defined in the Aetherium Genesis report.
-    Translates Natural Language into Physics/Visuals.
+    The WebGL Implementation of the LightProtocol.
+
+    This schema translates high-level cognitive intent into low-level rendering parameters.
+    It serves as the concrete transport layer for the abstract 'LightProtocol'.
     """
     intent_category: IntentCategory = Field(..., description="The broad category of the interaction")
     emotional_valence: float = Field(..., ge=-1.0, le=1.0, description="Emotional tone (-1.0=Negative/Sad, 1.0=Positive/Happy)")
