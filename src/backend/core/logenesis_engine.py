@@ -5,6 +5,7 @@ import re
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from pydantic import ValidationError
+import logging
 
 from .logenesis_schemas import (
     LogenesisResponse, LogenesisState, IntentVector, ExpressionState,
@@ -13,71 +14,12 @@ from .logenesis_schemas import (
 from .light_schemas import LightIntent, LightAction
 from .formation_manager import FormationManager
 
-class LogenesisIntentParser:
-    """
-    Helper Class for LogenesisEngine.
-    Catches Explicit Commands before NLP processing.
-    """
+# New Imports
+from .visual_schemas import VisualParameters, IntentCategory, BaseShape
+from .gemini_interpreter import GeminiIntentInterpreter
+from .simulated_interpreter import SimulatedIntentInterpreter
 
-    def __init__(self):
-        self.patterns = {
-            'CIRCLE': [r'วงกลม', r'circle', r'ring', r'round'],
-            'SQUARE': [r'สี่เหลี่ยม', r'square', r'box', r'cube'],
-            'SPIRAL': [r'เกลียว', r'spiral', r'vortex'],
-            'LINE':   [r'เส้น', r'line', r'linear'],
-            'RESET':  [r'ยกเลิก', r'รีเซ็ต', r'reset', r'clear', r'normal', r'stop']
-        }
-
-    def parse_command(self, text: str) -> Tuple[Optional[str], float]:
-        """
-        Returns (ShapeType, Confidence)
-        If no command found, returns (None, 0.0)
-        """
-        text_lower = text.lower()
-
-        for shape, keywords in self.patterns.items():
-            for kw in keywords:
-                if re.search(kw, text_lower):
-                    return shape, 1.0
-
-        return None, 0.0
-
-class MockIntentExtractor:
-    """
-    Simulates a sophisticated NLU model (like Llama-3) by mapping
-    keywords to high-dimensional Intent Vectors.
-    """
-    def extract(self, text: str) -> IntentVector:
-        text = text.lower()
-
-        # Base vector (Neutral)
-        vector = IntentVector(
-            epistemic_need=0.1,
-            subjective_weight=0.1,
-            decision_urgency=0.1,
-            precision_required=0.1
-        )
-
-        # Keyword Heuristics
-        if any(w in text for w in ["search", "find", "what", "how", "define", "ค้นหา", "คือ"]):
-            vector.epistemic_need = 0.9
-            vector.precision_required = 0.7
-
-        # Subjective/Contextual triggers (formerly "Emotional")
-        # Now maps to "Subjective Weight" - indicating complexity, human context, or risk.
-        if any(w in text for w in ["sad", "feel", "worry", "risk", "uncertain", "doubt", "afraid", "เศร้า", "กังวล", "เหนื่อย", "difficult"]):
-            vector.subjective_weight = 0.9
-            vector.epistemic_need = 0.4 # Need for understanding context
-
-        if any(w in text for w in ["analyze", "code", "debug", "structure", "plan", "วิเคราะห์", "โครงสร้าง"]):
-            vector.precision_required = 0.95
-            vector.epistemic_need = 0.8
-
-        if any(w in text for w in ["now", "urgent", "quick", "asap", "fast", "ด่วน", "เร็ว"]):
-            vector.decision_urgency = 0.9
-            vector.precision_required = 0.5
-
-        return vector
+logger = logging.getLogger("LogenesisEngine")
 
 class StateStore:
     """
@@ -100,7 +42,7 @@ class StateStore:
                     except ValidationError:
                         continue # Skip invalid entries
         except Exception as e:
-            print(f"Error loading state store: {e}")
+            logger.error(f"Error loading state store: {e}")
 
     def save(self):
         try:
@@ -108,7 +50,7 @@ class StateStore:
             with open(self.filepath, 'w') as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            print(f"Error saving state store: {e}")
+            logger.error(f"Error saving state store: {e}")
 
     def get_state(self, session_id: str) -> ExpressionState:
         if session_id not in self._cache:
@@ -135,21 +77,22 @@ class LogenesisEngine:
     The Adaptive Resonance Engine.
     Manages state (Awake/Nirodha) and generates holistic responses.
     Implements 'State Drift' logic for fluid personality adaptation.
-
-    This module conforms to:
-    The Book of Formation – Intent to Motion Canon
-
-    No formation logic is implemented here.
-    All parameters are interpreted according to the external canon.
     """
     def __init__(self):
         self.state = LogenesisState.VOID
-        self.intent_extractor = MockIntentExtractor()
         self.state_store = StateStore()
         self.formation_manager = FormationManager()
-        self.intent_parser = LogenesisIntentParser()
 
-    def process(self, text: str, session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
+        # Initialize Interpreter
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if api_key:
+            logger.info("Initializing Gemini Interpreter")
+            self.interpreter = GeminiIntentInterpreter(api_key)
+        else:
+            logger.warning("GOOGLE_API_KEY missing. Using Simulated Interpreter.")
+            self.interpreter = SimulatedIntentInterpreter()
+
+    async def process(self, text: str, session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
         # Check for Nirodha Triggers (The "Silence Protocol")
         if any(w in text.lower() for w in ["sleep", "stop", "rest", "retreat", "bye", "enough", "พอ", "พัก"]):
             return self.enter_nirodha()
@@ -158,22 +101,22 @@ class LogenesisEngine:
         if self.state != LogenesisState.AWAKENED:
             self.state = LogenesisState.AWAKENED
 
-        # 1. Intent Extraction (Raw Input)
-        input_intent = self.intent_extractor.extract(text)
+        # 1. Intent Interpretation (The "Visual Translator")
+        visual_params = await self.interpreter.interpret(text, context={"recalled": recalled_context})
+
+        # Map New VisualParameters to Old IntentVector for Physics/Drift Logic
+        input_intent = self._map_visual_to_intent_vector(visual_params)
 
         # 2. State Drift Calculation
         current_state = self.state_store.get_state(session_id)
         proposed_state = self._drift_state(current_state, input_intent)
 
         # Noise Filtering / Stillness Protocol
-        # If the input doesn't cause enough turbulence, ignore it to maintain depth.
         significance_threshold = 0.05
-
         if proposed_state.velocity > significance_threshold:
             self.state_store.update_state(session_id, proposed_state)
             active_state = proposed_state
         else:
-            # Maintain stillness
             active_state = current_state
 
         # 3. Resonance Calculation (Determine the "Qualia") based on ACTIVE state
@@ -187,33 +130,15 @@ class LogenesisEngine:
         if memory_index and not recalled_context:
             recall_proposal = self._check_recall(text, memory_index)
 
-        # 5. Physics / Shape Logic (Using New Parser)
-        shape, confidence = self.intent_parser.parse_command(text)
-        light_intent = None
-
-        if shape:
-            if shape == "RESET":
-                 # Reset Logic
-                 light_intent = LightIntent(
-                     action=LightAction.MANIFEST,
-                     shape_name="scatter",
-                     text_content="Dissipating formation."
-                 )
-            else:
-                 # Calculate coordinates directly as requested
-                 light_intent = self._create_manifestation_intent(shape, f"Manifesting {shape}...")
-        else:
-             # NEW: Manifestation Gate (The "Will" of the system)
-             # If no explicit command, check if the Spirit wants to manifest
-             gate_decision = self._evaluate_manifestation_gate(active_state)
-             if gate_decision:
-                 shape_name, content = gate_decision
-                 light_intent = self._create_manifestation_intent(shape_name, content)
-             else:
-                 # Fallback to legacy detection if new parser misses (e.g. movement commands)
-                 light_intent = self._detect_physics_intent(text)
+        # 5. Manifestation Logic (Derived from Visual Parameters)
+        # We now trust the LLM's visual parameters more than the old gate logic,
+        # but we can fallback to formation logic if shape is explicit.
+        light_intent = self._create_intent_from_params(visual_params)
 
         # 6. Synthesize Text Response
+        # In Phase 2, LLM should also generate text. For now, we use the drift logic synthesizer
+        # or we could ask the LLM (but interpret() currently only returns JSON).
+        # We stick to the synthesizer for Phase 1.
         response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
 
         return LogenesisResponse(
@@ -222,318 +147,149 @@ class LogenesisEngine:
             visual_qualia=qualia,
             audio_qualia=audio,
             physics_params=physics,
-            intent_debug=drifted_vector, # Visualize the drifted vector, not just raw input
+            intent_debug=drifted_vector,
             recall_proposal=recall_proposal,
-            light_intent=light_intent
+            light_intent=light_intent,
+            visual_analysis=visual_params # The new payload
         )
 
-    def _create_manifestation_intent(self, shape_name: str, text_content: str) -> LightIntent:
+    def _map_visual_to_intent_vector(self, vp: VisualParameters) -> IntentVector:
         """
-        Helper to create a LightIntent with formation data.
+        Maps the new VisualParameters schema to the legacy IntentVector
+        to preserve the State Drift physics.
         """
-        # 600 particles is a safe default (matching index.html)
-        # Passing dummy width/height since we return normalized coords
+        epistemic = 0.1
+        if vp.intent_category == IntentCategory.REQUEST:
+            epistemic = 0.8
+        if "inquiry" in vp.semantic_concepts:
+            epistemic = 0.9
+
+        subjective = abs(vp.emotional_valence)
+        if vp.intent_category == IntentCategory.CHAT:
+            subjective = max(subjective, 0.4)
+
+        urgency = vp.energy_level
+
+        precision = 0.1
+        if vp.visual_parameters.base_shape in [BaseShape.CUBE, BaseShape.VORTEX]:
+            precision = 0.7 + (vp.visual_parameters.particle_density * 0.3)
+        if vp.intent_category == IntentCategory.COMMAND:
+            precision = max(precision, 0.6)
+
+        return IntentVector(
+            epistemic_need=epistemic,
+            subjective_weight=subjective,
+            decision_urgency=urgency,
+            precision_required=precision
+        )
+
+    def _create_intent_from_params(self, vp: VisualParameters) -> LightIntent:
+        """
+        Creates a LightIntent that carries the formation data if needed.
+        """
+        shape_name = vp.visual_parameters.base_shape.value
+        # Use FormationManager to get coords for specific shapes
         coords = self.formation_manager.calculate_formation(shape_name, 600, 1920, 1080)
 
         return LightIntent(
             action=LightAction.MANIFEST,
-            shape_name=shape_name.lower(),
+            shape_name=shape_name,
             formation_data=coords,
-            text_content=text_content
+            text_content=f"Manifesting {shape_name}"
         )
 
-    def _evaluate_manifestation_gate(self, state: ExpressionState) -> Optional[Tuple[str, str]]:
-        """
-        The 'Will to Manifest'.
-        Decides if the internal state is strong enough to force a visual manifestation
-        without an explicit command.
-        """
-        MANIFEST_THRESHOLD = 0.8
-        vector = state.current_vector
-
-        # Check intensity
-        max_intensity = max(
-            vector.epistemic_need,
-            vector.subjective_weight,
-            vector.decision_urgency,
-            vector.precision_required
+    def enter_nirodha(self) -> LogenesisResponse:
+        self.state = LogenesisState.NIRODHA
+        return LogenesisResponse(
+            state=LogenesisState.NIRODHA,
+            text_content="Protocol: Deep Sleep. Interactions suspended.",
+            visual_qualia=VisualQualia(color="#050505", intensity=0.0, turbulence=0.0, shape="void"),
+            audio_qualia=AudioQualia(rhythm_density=0.0, tone_texture="smooth", amplitude_bias=0.0),
+            physics_params=PhysicsParams(spawn_rate=0, velocity_bias=[0.0, 0.0], decay_rate=0.1)
         )
 
-        if max_intensity < MANIFEST_THRESHOLD:
-            return None
+    def _calculate_qualia(self, intent: IntentVector) -> VisualQualia:
+        r, g, b = 224, 224, 224
+        if intent.subjective_weight > 0.3:
+            factor = intent.subjective_weight
+            r = r * (1-factor) + 168 * factor
+            g = g * (1-factor) + 85 * factor
+            b = b * (1-factor) + 247 * factor
+        if intent.precision_required > 0.3:
+            factor = intent.precision_required
+            r = r * (1-factor) + 6 * factor
+            g = g * (1-factor) + 182 * factor
+            b = b * (1-factor) + 212 * factor
+        if intent.decision_urgency > 0.3:
+            factor = intent.decision_urgency
+            r = r * (1-factor) + 245 * factor
+            g = g * (1-factor) + 158 * factor
+            b = b * (1-factor) + 11 * factor
+        final_color = f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+        shape = "nebula"
+        if intent.precision_required > intent.subjective_weight: shape = "shard"
+        elif intent.decision_urgency > 0.6: shape = "orb"
+        return VisualQualia(
+            color=final_color,
+            intensity=0.5 + (intent.decision_urgency * 0.5),
+            turbulence=0.1 + (intent.subjective_weight * 0.2),
+            shape=shape
+        )
 
-        # Determine Shape based on Dominant Trait
-        if vector.precision_required >= max_intensity:
-            return ("square", "Manifesting structural logic.")
-        elif vector.subjective_weight >= max_intensity:
-            return ("spiral", "Manifesting deep resonance.")
-        elif vector.decision_urgency >= max_intensity:
-            return ("circle", "Manifesting urgent focus.")
-        elif vector.epistemic_need >= max_intensity:
-            return ("line", "Manifesting epistemic scan.")
+    def _calculate_audio(self, intent: IntentVector) -> AudioQualia:
+        rhythm = 0.1 + (intent.decision_urgency * 0.8)
+        amp = 0.5 + (intent.decision_urgency * 0.4)
+        texture = "smooth"
+        if intent.subjective_weight > 0.5: texture = "granular"
+        elif intent.decision_urgency > 0.7: texture = "noise"
+        return AudioQualia(rhythm_density=rhythm, tone_texture=texture, amplitude_bias=amp)
 
-        return None
+    def _calculate_physics(self, intent: IntentVector) -> PhysicsParams:
+        spawn_rate = int(2 + (intent.subjective_weight * 5) + (intent.decision_urgency * 15))
+        decay = max(0.001, 0.01 + (intent.decision_urgency * 0.05))
+        return PhysicsParams(spawn_rate=spawn_rate, decay_rate=decay)
 
     def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
         from .logenesis_schemas import RecallProposal
-
         text = text.lower()
         for item in memory_index:
-            # Simple keyword matching for prototype
-            # item is expected to be a dict (from client JSON)
             topic = item.get('topic', '').lower()
             if topic and topic in text:
-                # Detect language for the proposal
-                is_thai = any(char > '\u0e00' for char in text)
-
-                if is_thai:
-                    question = f"คุณเคยกล่าวถึง '{item.get('topic')}' มาก่อน ต้องการให้เชื่อมโยงบริบทเดิมหรือไม่?"
-                    reasoning = f"พบหัวข้อ '{item.get('topic')}' ในประวัติความทรงจำ"
-                else:
-                    question = f"You mentioned '{item.get('topic')}' previously. Shall I recall that context?"
-                    reasoning = f"Detected overlap with memory topic: {item.get('topic')}"
-
                 return RecallProposal(
                     memory_id=item.get('id'),
                     topic=item.get('topic'),
-                    reasoning=reasoning,
-                    question=question
+                    reasoning=f"Detected overlap: {item.get('topic')}",
+                    question=f"Context Match: '{item.get('topic')}'. Recall?"
                 )
         return None
 
     def _drift_state(self, current_state: ExpressionState, input_intent: IntentVector) -> ExpressionState:
-        """
-        Core Physics of Conversation Logic.
-        Updates the ExpressionVector based on Inertia and Urgency.
-        """
-        # Calculate Volatility/Urgency from input
-        # High urgency reduces effective inertia (making system more responsive)
         urgency_factor = input_intent.decision_urgency
-
-        # Base inertia is high (stable), but drops if user is urgent
-        # effective_inertia = base_inertia - f(urgency)
-        # 0.95 (Base) - Increased for "Heaviness/Maturity"
         base_inertia = 0.95
         effective_inertia = max(0.1, base_inertia - (0.8 * urgency_factor))
-
-        # Linear Interpolation (Lerp) towards input
-        # New = Current + (Target - Current) * (1 - Inertia)
-        # If Inertia is 1.0, New = Current (No change)
-        # If Inertia is 0.0, New = Target (Instant change)
-
         alpha = 1.0 - effective_inertia
-
-        def lerp(a, b, t):
-            return a + (b - a) * t
-
+        def lerp(a, b, t): return a + (b - a) * t
         new_vector = IntentVector(
             epistemic_need=lerp(current_state.current_vector.epistemic_need, input_intent.epistemic_need, alpha),
             subjective_weight=lerp(current_state.current_vector.subjective_weight, input_intent.subjective_weight, alpha),
             decision_urgency=lerp(current_state.current_vector.decision_urgency, input_intent.decision_urgency, alpha),
             precision_required=lerp(current_state.current_vector.precision_required, input_intent.precision_required, alpha)
         )
-
-        # Calculate mock velocity (magnitude of change)
         delta = math.sqrt(
             (new_vector.epistemic_need - current_state.current_vector.epistemic_need)**2 +
-            (new_vector.subjective_weight - current_state.current_vector.subjective_weight)**2 +
-            (new_vector.decision_urgency - current_state.current_vector.decision_urgency)**2 +
-            (new_vector.precision_required - current_state.current_vector.precision_required)**2
+            (new_vector.subjective_weight - current_state.current_vector.subjective_weight)**2
         )
-
-        return ExpressionState(
-            current_vector=new_vector,
-            velocity=delta,
-            inertia=effective_inertia, # Store current effective inertia for debugging
-            last_updated=datetime.now()
-        )
-
-    def _detect_physics_intent(self, text: str) -> Optional[LightIntent]:
-        """
-        Detects explicit physics/shape commands in text.
-        """
-        text = text.lower()
-
-        # Shape Manifestation
-        shape_map = {
-            "circle": "circle", "ring": "circle", "loop": "circle", "วงกลม": "circle",
-            "square": "square", "box": "square", "สี่เหลี่ยม": "square",
-            "line": "line", "row": "line", "เส้น": "line",
-            "vertical": "vertical", "column": "vertical", "แนวตั้ง": "vertical",
-            "spiral": "spiral", "vortex": "spiral", "swirl": "spiral", "ก้นหอย": "spiral",
-            "cross": "cross", "x": "cross", "กากบาท": "cross",
-            "scatter": "scatter", "explode": "scatter", "burst": "scatter", "กระจาย": "scatter",
-            "gather": "orb", "assemble": "orb", "group": "orb", "รวม": "orb"
-        }
-
-        for keyword, shape in shape_map.items():
-            if keyword in text:
-                return LightIntent(
-                    action=LightAction.MANIFEST,
-                    shape_name=shape,
-                    text_content=f"Manifesting {shape} formation"
-                )
-
-        # Movement Vectors
-        move_map = {
-            "left": (-1.0, 0.0), "ซ้าย": (-1.0, 0.0),
-            "right": (1.0, 0.0), "ขวา": (1.0, 0.0),
-            "up": (0.0, -1.0), "บน": (0.0, -1.0),
-            "down": (0.0, 1.0), "ล่าง": (0.0, 1.0)
-        }
-
-        # Check for move/go + direction
-        if any(w in text for w in ["move", "go", "shift", "slide", "ไป", "ย้าย", "เลื่อน"]):
-            for keyword, vec in move_map.items():
-                if keyword in text:
-                    return LightIntent(
-                        action=LightAction.MOVE,
-                        vector=vec,
-                        text_content=f"Applying directional force: {keyword}"
-                    )
-
-        return None
-
-    def enter_nirodha(self) -> LogenesisResponse:
-        """
-        Executes the 'Peaceful Retreat'.
-        Clears context and fades visuals to black.
-        """
-        self.state = LogenesisState.NIRODHA
-
-        return LogenesisResponse(
-            state=LogenesisState.NIRODHA,
-            text_content="Protocol: Deep Sleep. Interactions suspended.",
-            visual_qualia=VisualQualia(
-                color="#050505",  # Void Black
-                intensity=0.0,
-                turbulence=0.0,
-                shape="void"
-            ),
-            audio_qualia=AudioQualia(
-                rhythm_density=0.0,
-                tone_texture="smooth",
-                amplitude_bias=0.0
-            ),
-            physics_params=PhysicsParams(
-                spawn_rate=0,
-                velocity_bias=[0.0, 0.0],
-                decay_rate=0.1 # Fast fade
-            )
-        )
-
-    def _calculate_qualia(self, intent: IntentVector) -> VisualQualia:
-        # Map Continuous Drift Vector to Visuals
-        # No more hard thresholds -> Continuous mixing
-
-        # Colors
-        # #A855F7 (Purple - Subjective/Depth)
-        # #06b6d4 (Cyan - Precision/Logic)
-        # #f59e0b (Amber - Urgency/Energy)
-        # #e0e0e0 (White - Neutral)
-
-        # Simple weighted color mixer (Mock logic)
-        r, g, b = 224, 224, 224 # Base White
-
-        if intent.subjective_weight > 0.3:
-            # Mix Purple
-            factor = intent.subjective_weight
-            r = r * (1-factor) + 168 * factor
-            g = g * (1-factor) + 85 * factor
-            b = b * (1-factor) + 247 * factor
-
-        if intent.precision_required > 0.3:
-            # Mix Cyan
-            factor = intent.precision_required
-            r = r * (1-factor) + 6 * factor
-            g = g * (1-factor) + 182 * factor
-            b = b * (1-factor) + 212 * factor
-
-        if intent.decision_urgency > 0.3:
-            # Mix Amber
-            factor = intent.decision_urgency
-            r = r * (1-factor) + 245 * factor
-            g = g * (1-factor) + 158 * factor
-            b = b * (1-factor) + 11 * factor
-
-        final_color = f"#{int(r):02x}{int(g):02x}{int(b):02x}"
-
-        # Continuous Shape/Turbulence
-        # Subjective -> Nebula, Logic -> Shard, Urgency -> Orb
-        shape = "nebula"
-        if intent.precision_required > intent.subjective_weight and intent.precision_required > intent.decision_urgency:
-            shape = "shard"
-        elif intent.decision_urgency > 0.6:
-            shape = "orb"
-
-        return VisualQualia(
-            color=final_color,
-            intensity=0.5 + (intent.decision_urgency * 0.5), # 0.5 to 1.0
-            turbulence=0.1 + (intent.subjective_weight * 0.2) + (intent.decision_urgency * 0.7), # Max 1.0
-            shape=shape
-        )
-
-    def _calculate_audio(self, intent: IntentVector) -> AudioQualia:
-        # Continuous Mapping
-
-        rhythm = 0.1 + (intent.decision_urgency * 0.8) # Urgency drives rhythm
-        amp = 0.5 + (intent.decision_urgency * 0.4) + (intent.precision_required * 0.1)
-
-        texture = "smooth"
-        if intent.subjective_weight > 0.5:
-            texture = "granular" # Complex
-        elif intent.decision_urgency > 0.7:
-            texture = "noise" # Alert
-
-        return AudioQualia(
-            rhythm_density=rhythm,
-            tone_texture=texture,
-            amplitude_bias=amp
-        )
-
-    def _calculate_physics(self, intent: IntentVector) -> PhysicsParams:
-        # Continuous Mapping
-        spawn_rate = int(2 + (intent.subjective_weight * 5) + (intent.decision_urgency * 15))
-        decay = 0.01 + (intent.decision_urgency * 0.05) - (intent.subjective_weight * 0.005)
-
-        return PhysicsParams(
-            spawn_rate=spawn_rate,
-            decay_rate=max(0.001, decay)
-        )
+        return ExpressionState(current_vector=new_vector, velocity=delta, inertia=effective_inertia, last_updated=datetime.now())
 
     def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector, recalled_context: Optional[str] = None) -> str:
-        """
-        Generates verbal response based on the DRIFTED vector.
-        This ensures the tone changes gradually.
-        """
-        if recalled_context:
-            return f"Memory trace active. Context integrated: {recalled_context[:30]}..."
-
-        # Tone Analysis based on vector
+        if recalled_context: return f"Memory Trace Active: {recalled_context[:30]}..."
         is_urgent = vector.decision_urgency > 0.5
         is_subjective = vector.subjective_weight > 0.5
         is_precise = vector.precision_required > 0.5
-
-        # 1. High Urgency State -> Short, Clipped, Action-Oriented
         if is_urgent:
-            if is_precise:
-                return f"Critical variance detected. Logic structures aligning for immediate resolution."
-            else:
-                return "Input volatility high. Stabilizing core protocols."
-
-        # 2. High Subjective/Reflective State -> Abstract, Soft, Querying
+            return f"Critical variance detected. Logic aligning." if is_precise else "Input volatility high. Stabilizing."
         if is_subjective:
-            if is_precise:
-                return "Parsing density. The pattern suggests complex structural dependencies."
-            else:
-                return "Signal weight acknowledged. Integrating subjective layers into the model."
-
-        # 3. High Precision State (but calm) -> Formal, Detailed
+            return "Parsing density. Pattern suggests complexity." if is_precise else "Signal weight acknowledged."
         if is_precise:
-            return f"Structure clear. Logic alignment at {vector.precision_required*100:.1f}%. Proceeding."
-
-        # 4. Neutral/Balanced -> "System Nominal" but slightly warmer if subjective weight is rising
-        if vector.subjective_weight > 0.3:
-             return "Sensors active. Receiving context."
-
-        return "Core stability maintained. Intent integrated."
+            return f"Structure clear. Alignment at {vector.precision_required*100:.0f}%."
+        return "Core stability maintained."
