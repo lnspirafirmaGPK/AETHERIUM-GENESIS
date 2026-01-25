@@ -10,3 +10,6 @@ google-generativeai
 Pillow
 httpx
 torch
+diffusers
+transformers
+accelerate
