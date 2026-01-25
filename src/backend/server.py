@@ -150,6 +150,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Send specialized response format directly
                 await websocket.send_text(response.model_dump_json())
+
+                # Bridge to LCL if light_intent is present
+                if response.light_intent:
+                    logger.info(f"Logenesis emitted Physics Intent: {response.light_intent}")
+                    response.light_intent.source = "logenesis_core"
+                    instruction = lcl.process(response.light_intent)
+                    if instruction:
+                        # Send the instruction as a separate message
+                        await websocket.send_text(instruction.model_dump_json())
+
                 continue # Skip standard processing
 
             elif mode == "ai":

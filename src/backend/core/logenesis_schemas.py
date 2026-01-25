@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
+from .light_schemas import LightIntent
 
 class LogenesisState(str, Enum):
     VOID = "VOID"
@@ -97,3 +98,4 @@ class LogenesisResponse(BaseModel):
     physics_params: Optional[PhysicsParams] = None
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
     recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
+    light_intent: Optional[LightIntent] = None # Direct bridge to LCL
