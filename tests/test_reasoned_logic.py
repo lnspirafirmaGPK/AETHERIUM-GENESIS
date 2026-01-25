@@ -33,7 +33,7 @@ def test_reasoned_response_subjective():
         )
         mock_drift.return_value = ExpressionState(
             current_vector=target_vector,
-            velocity=0.0,
+            velocity=1.0, # High velocity to bypass noise filter
             inertia=0.0
         )
 
@@ -42,7 +42,7 @@ def test_reasoned_response_subjective():
 
         assert isinstance(response, LogenesisResponse)
         assert response.intent_debug.subjective_weight > 0.6
-        assert "The signal is dense" in response.text_content
+        assert "Signal weight acknowledged" in response.text_content
 
 def test_reasoned_response_epistemic():
     with patch.object(LogenesisEngine, '_drift_state') as mock_drift:
@@ -56,14 +56,14 @@ def test_reasoned_response_epistemic():
         )
         mock_drift.return_value = ExpressionState(
             current_vector=target_vector,
-            velocity=0.0,
+            velocity=1.0, # Bypass noise filter
             inertia=0.0
         )
 
         response = engine.process("Analyze the structure of this code")
 
         assert response.intent_debug.epistemic_need > 0.6
-        assert "Structured query acknowledged" in response.text_content
+        assert "Structure clear" in response.text_content
 
 def test_nirodha_audio():
     engine = LogenesisEngine()

@@ -74,6 +74,16 @@ class RecallProposal(BaseModel):
     reasoning: str = Field(..., description="Why the system suggests recalling this (e.g., 'You mentioned X...')")
     question: str = Field(..., description="The text to display to the user (e.g., 'Do you want to recall...?')")
 
+class GenesisMemory(BaseModel):
+    """
+    Immutable core memory that defines the system's soul.
+    "Jarum" (Inscribed) memories that persist across all sessions.
+    """
+    id: str = Field(..., description="Unique ID for the genesis memory")
+    text_content: str = Field(..., description="The poetic/philosophical text")
+    ideal_vector: IntentVector = Field(..., description="The perfect state vector associated with this memory")
+    inscribed_at: datetime = Field(default_factory=datetime.now)
+
 class LogenesisResponse(BaseModel):
     """
     The holistic response packet from LOGENESIS Engine.
