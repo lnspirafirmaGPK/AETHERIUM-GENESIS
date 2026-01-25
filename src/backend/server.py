@@ -134,7 +134,10 @@ async def websocket_endpoint(websocket: WebSocket):
             if mode == "logenesis":
                 # Special Path for Adaptive Resonance Engine
                 text = user_input.get("text", "")
-                response = logenesis_engine.process(text)
+                # Extract session_id from input or use default
+                session_id = user_input.get("session_id", "global_session")
+
+                response = logenesis_engine.process(text, session_id=session_id)
                 logger.info(f"Logenesis Response: {response}")
 
                 # Send specialized response format directly

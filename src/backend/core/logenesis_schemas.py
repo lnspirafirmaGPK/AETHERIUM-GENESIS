@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
+from datetime import datetime
 
 class LogenesisState(str, Enum):
     VOID = "VOID"
@@ -18,6 +19,16 @@ class IntentVector(BaseModel):
     precision_required: float = Field(..., description="Need for precise/formal structure (0.0-1.0)")
     # Simulation of high-dimensional embedding
     raw_embedding: Optional[List[float]] = Field(default=None, description="Mock 512-dim vector")
+
+class ExpressionState(BaseModel):
+    """
+    The persistent 'Trajectory' of the AI's expression for a specific session.
+    This replaces static 'Personas'. It drifts based on interaction pressure.
+    """
+    current_vector: IntentVector = Field(..., description="The current smoothed expression vector")
+    velocity: float = Field(default=0.0, description="Rate of change in the vector (Volatility)")
+    inertia: float = Field(default=0.8, description="Current resistance to change (0.1=Fluid, 0.9=Rigid)")
+    last_updated: datetime = Field(default_factory=datetime.now, description="Last interaction timestamp")
 
 class VisualQualia(BaseModel):
     """
