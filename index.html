@@ -59,6 +59,33 @@
             border-radius: 50%;
             transition: background 0.3s;
         }
+
+        /* Input Layer (Hidden by default) */
+        #input-layer {
+            pointer-events: auto;
+            display: none; /* Toggled via JS */
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            border-top: 1px solid #333;
+            padding: 10px;
+        }
+
+        /* Recall Modal */
+        #recall-modal {
+            pointer-events: auto;
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%; max-width: 400px;
+            background: rgba(10, 15, 20, 0.95);
+            border: 1px solid #06b6d4;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
@@ -100,6 +127,21 @@
         </div>
     </div>
 
+    <!-- Input Layer -->
+    <div id="input-layer">
+        <input id="cmd-input" type="text" class="w-full bg-transparent text-cyan-500 font-mono outline-none text-sm" placeholder="Enter transmission..." autocomplete="off">
+    </div>
+
+    <!-- Recall Modal -->
+    <div id="recall-modal">
+        <h3 class="text-cyan-400 font-bold text-sm tracking-wider mb-2">MEMORY RESONANCE</h3>
+        <p id="recall-text" class="text-gray-300 text-xs mb-4 font-mono leading-relaxed"></p>
+        <div class="flex justify-end gap-4">
+            <button id="btn-ignore" class="text-gray-500 hover:text-white text-xs">IGNORE</button>
+            <button id="btn-recall" class="text-cyan-400 border border-cyan-400 px-3 py-1 rounded hover:bg-cyan-900 text-xs transition-colors">RECALL</button>
+        </div>
+    </div>
+
     <script>
         // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
@@ -113,6 +155,7 @@
         /**
          * AetherMemory: Somatic Memory Layer (Passive Storage)
          * Stores raw experiential data without interpretation.
+         * Now supports explicit conversation indexing.
          */
         class AetherMemory {
             constructor() {
@@ -125,7 +168,8 @@
                 return raw ? JSON.parse(raw) : {
                     awakening_count: 0,
                     last_awakened_at: null,
-                    first_contact_at: Date.now()
+                    first_contact_at: Date.now(),
+                    conversations: [] // [{id, topic, summary, timestamp}]
                 };
             }
 
@@ -139,6 +183,34 @@
                 this.save();
             }
 
+            // New: Save a conversation memory
+            saveConversation(topic, summary) {
+                const id = 'mem_' + Date.now().toString(36);
+                this.data.conversations.push({
+                    id,
+                    topic,
+                    summary,
+                    timestamp: Date.now()
+                });
+                this.save();
+                return id;
+            }
+
+            // New: Get lightweight index for server check
+            getIndex() {
+                return this.data.conversations.map(c => ({
+                    id: c.id,
+                    topic: c.topic,
+                    timestamp: new Date(c.timestamp).toISOString()
+                }));
+            }
+
+            // New: Get specific summary
+            getSummary(id) {
+                const item = this.data.conversations.find(c => c.id === id);
+                return item ? item.summary : null;
+            }
+
             getSnapshot() {
                 return { ...this.data };
             }
@@ -146,39 +218,20 @@
 
         /**
          * IntentResolver: Bias Calculation Layer (Logic)
-         * Interprets memory into behavioral tendencies (Biases).
-         * Pure logic, no side effects on UI.
          */
         class IntentResolver {
             static calculateBias(memory) {
                 const now = Date.now();
-
-                // 1. Inertia (formerly Reluctance): Resistance to state change
-                // Logic: Cold starts have high inertia. Frequent access lowers inertia.
-                // Formula: Exponential decay.
-                // If awake < 30s ago -> High Inertia (1.0) - System just shut down, needs time to reset.
-                // If awake > 5 mins ago -> Low Inertia (0.0) - System ready for cold start.
                 let inertia = 0;
                 if (memory.last_awakened_at) {
-                    const timeSince = (now - memory.last_awakened_at) / 1000; // seconds
-                    // Decay function: e^(-0.01 * t) roughly
-                    // Let's use a simpler linear map for predictability in prototype
-                    // 0s -> 1.0, 300s (5min) -> 0.0
+                    const timeSince = (now - memory.last_awakened_at) / 1000;
                     inertia = Math.max(0, 1 - (timeSince / 300));
-                    // Boost inertia if extremely recent (< 30s)
                     if (timeSince < 30) inertia = Math.min(1.0, inertia + 0.5);
                 }
-
-                // 2. Integration Index (formerly Bond): System Familiarity
-                // Logic: Higher integration allows for more complex manifestations.
-                // Formula: Logarithmic growth.
-                // 1 count -> 0.0
-                // 100 counts -> 1.0 (Soft Cap)
                 let integration = 0;
                 if (memory.awakening_count > 0) {
                     integration = Math.min(1.0, Math.log10(memory.awakening_count + 1) / 2.0);
                 }
-
                 return {
                     inertia: parseFloat(inertia.toFixed(2)),
                     integration: parseFloat(integration.toFixed(2))
@@ -187,7 +240,7 @@
         }
 
         /**
-         * AetheBus: Simple Event Bus for decoupled communication
+         * AetheBus: Simple Event Bus
          */
         class AetheBus {
             constructor() {
@@ -214,17 +267,14 @@
                 this.scale = scale;
                 this.targets = [];
             }
-
             generate() {
                 this.targets = [];
-                // 1. Face Oval
                 for (let angle = 0; angle < 360; angle += 4) {
                     const rad = angle * (Math.PI / 180);
                     const x = this.cx + Math.cos(rad) * (this.scale * 0.75);
                     const y = this.cy + Math.sin(rad) * (this.scale * 1.0);
                     this.targets.push({ x, y, type: 'SKIN', color: 'rgba(255, 220, 230, 0.9)' });
                 }
-                // 2. Eyes
                 [-1, 1].forEach(side => {
                     const eyeX = this.cx + (side * this.scale * 0.35);
                     const eyeY = this.cy - (this.scale * 0.15);
@@ -240,7 +290,6 @@
                         }
                     }
                 });
-                // 3. Lips
                 for (let x = -0.25; x <= 0.25; x += 0.02) {
                     const px = this.cx + (x * this.scale);
                     const py = this.cy + (this.scale * 0.45);
@@ -258,7 +307,6 @@
                 this.canvas = canvas;
                 this.reset();
             }
-
             reset() {
                 this.x = Math.random() * this.canvas.width;
                 this.y = Math.random() * this.canvas.height;
@@ -267,15 +315,12 @@
                 this.size = Math.random() * 2 + 0.5;
                 this.alpha = 0;
                 this.color = 'rgba(173, 216, 230, 0.5)';
-
-                // Manifestation props
                 this.targetX = 0;
                 this.targetY = 0;
-                this.baseY = 0; // For mouth animation
+                this.baseY = 0;
                 this.targetType = null;
                 this.targetColor = null;
             }
-
             update(state, isDrifting, bias = { inertia: 0, integration: 0 }) {
                 if (state === 'NIRODHA') {
                     this.vx *= 0.95;
@@ -285,14 +330,10 @@
                     this.y += this.vy;
                 } else if (state === 'MANIFESTATION') {
                     if (this.targetType) {
-                        // Inertia affects response speed (Lerp factor)
-                        // Base 0.1 -> Reduced by inertia
                         const lerpFactor = 0.1 * (1 - (bias.inertia * 0.8));
-
                         this.x += (this.targetX - this.x) * lerpFactor;
                         this.y += (this.targetY - this.y) * lerpFactor;
                         this.alpha = Math.min(0.9, this.alpha + 0.02);
-
                         this.color = this.targetColor;
                     } else {
                         this.x += this.vx;
@@ -300,39 +341,26 @@
                         this.alpha = Math.max(0, this.alpha - 0.02);
                     }
                 } else {
-                    // Normal / Awake State
-
-                    // Inertia affects Velocity Damping
-                    // High Inertia -> Higher damping (slower movement)
                     const dampening = 1 - (bias.inertia * 0.05);
                     this.vx *= dampening;
                     this.vy *= dampening;
-
                     this.x += this.vx;
                     this.y += this.vy;
                     this.alpha = Math.min(0.6, this.alpha + 0.01);
-
-                    // State Color:
-                    // High Inertia -> Dimmer / Desaturated
                     if (bias.inertia > 0.5) {
-                         this.color = `rgba(100, 150, 100, ${this.alpha})`; // Dull Green
+                         this.color = `rgba(100, 150, 100, ${this.alpha})`;
                     } else {
-                         this.color = `rgba(34, 197, 94, ${this.alpha})`; // Matrix Greenish
+                         this.color = `rgba(34, 197, 94, ${this.alpha})`;
                     }
-
                     if (isDrifting) {
-                        // Integration increases drift activity
                         const driftForce = 1.5 * (1 + bias.integration);
                         this.x += (Math.random() - 0.5) * driftForce;
                         this.y += (Math.random() - 0.5) * driftForce;
                     }
-
-                    // Bounce
                     if (this.x < 0 || this.x > this.canvas.width) this.vx *= -1;
                     if (this.y < 0 || this.y > this.canvas.height) this.vy *= -1;
                 }
             }
-
             draw(ctx) {
                 if (this.alpha <= 0.01) return;
                 ctx.fillStyle = this.color;
@@ -348,40 +376,182 @@
         class GunUI {
             constructor() {
                 this.bus = new AetheBus();
-                this.memory = new AetherMemory(); // Somatic Memory
-
+                this.memory = new AetherMemory();
                 this.canvas = document.getElementById('gun-canvas');
                 this.ctx = this.canvas.getContext('2d');
                 this.particles = [];
                 this.state = 'NIRODHA';
                 this.tapCount = 0;
-                this.phi = 0;
                 this.isSleeping = false;
-
-                // Intent Bias State (Calculated on Wake)
                 this.currentBias = { inertia: 0, integration: 0 };
-
                 this.lastInteraction = Date.now();
                 this.faceTopology = null;
                 this.faceTargets = [];
 
+                // Network
+                this.ws = null;
+                this.pendingRecall = null; // Store proposal to act on
+
                 this.init();
                 this.setupAetheBus();
+                this.setupInput();
+                this.connect();
             }
 
             init() {
                 window.addEventListener('resize', () => this.resize());
                 this.resize();
-
-                // Create particles
                 for(let i=0; i<800; i++) this.particles.push(new Particle(this.canvas));
 
-                // Input
-                const handleTap = (e) => this.handleTap(e);
+                // Touch/Click
+                const handleTap = (e) => {
+                    // Don't trigger tap logic if clicking UI elements
+                    if (e.target.closest('#input-layer') || e.target.closest('#recall-modal')) return;
+                    this.handleTap(e);
+                };
                 window.addEventListener('touchstart', handleTap);
                 window.addEventListener('mousedown', handleTap);
 
+                // Key listener for hidden input
+                window.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                        // Toggle input layer
+                        const layer = document.getElementById('input-layer');
+                        layer.style.display = layer.style.display === 'block' ? 'none' : 'block';
+                        if (layer.style.display === 'block') document.getElementById('cmd-input').focus();
+                    }
+                });
+
                 this.render();
+            }
+
+            connect() {
+                // Determine WS URL
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.host || 'localhost:8000';
+                // In local dev without real server serving html, this might fail, so we default to localhost:8000
+                const wsUrl = `ws://localhost:8000/ws`;
+
+                this.log(`NET: Connecting to ${wsUrl}...`);
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    this.log("NET: Uplink Established.");
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'STATE') {
+                            // Ignored: Physics sync
+                        } else if (msg.type === 'LOGENESIS_RESPONSE') {
+                            this.handleLogenesisResponse(msg);
+                        } else if (msg.action) {
+                             // Regular LCL action (fallback)
+                             this.log(`LCL: ${msg.action}`);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+
+                this.ws.onclose = () => {
+                    this.log("NET: Uplink Severed. Retrying in 5s...");
+                    setTimeout(() => this.connect(), 5000);
+                };
+            }
+
+            setupInput() {
+                const input = document.getElementById('cmd-input');
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        const text = input.value.trim();
+                        if (text) this.sendText(text);
+                        input.value = '';
+                        document.getElementById('input-layer').style.display = 'none';
+                    }
+                });
+
+                // Recall Modal Buttons
+                document.getElementById('btn-ignore').addEventListener('click', () => {
+                    document.getElementById('recall-modal').style.display = 'none';
+                    this.pendingRecall = null;
+                });
+
+                document.getElementById('btn-recall').addEventListener('click', () => {
+                    if (this.pendingRecall) {
+                        this.executeRecall(this.pendingRecall);
+                    }
+                    document.getElementById('recall-modal').style.display = 'none';
+                });
+            }
+
+            // Command parser for test purposes
+            sendText(text, recalledContext = null) {
+                this.log(`USER: ${text}`);
+
+                // Local Command: /save <topic> <content>
+                if (text.startsWith('/save ')) {
+                    const parts = text.split(' ');
+                    if (parts.length >= 3) {
+                        const topic = parts[1];
+                        const summary = parts.slice(2).join(' ');
+                        this.memory.saveConversation(topic, summary);
+                        this.log(`MEM: Saved topic '[${topic}]'.`);
+                        return;
+                    }
+                }
+
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const payload = {
+                        mode: "logenesis",
+                        input: {
+                            text: text,
+                            session_id: "pwa_session_" + this.currentBias.integration,
+                            memory_index: this.memory.getIndex(),
+                            recalled_context: recalledContext
+                        }
+                    };
+                    this.ws.send(JSON.stringify(payload));
+                } else {
+                    this.log("NET: Offline. Cannot transmit.");
+                }
+            }
+
+            handleLogenesisResponse(res) {
+                // Update State
+                this.bus.publish('INTENT_CHANGE', {
+                    state: res.state,
+                    hex: res.visual_qualia.color,
+                    phi: res.intent_debug.decision_urgency // use urgency as phi proxy
+                });
+
+                // Show Text
+                if (res.text_content) {
+                    this.log(`AI: ${res.text_content}`);
+                }
+
+                // Handle Recall Proposal
+                if (res.recall_proposal) {
+                    this.showRecallModal(res.recall_proposal);
+                }
+            }
+
+            showRecallModal(proposal) {
+                this.pendingRecall = proposal;
+                const modal = document.getElementById('recall-modal');
+                document.getElementById('recall-text').innerText = proposal.question;
+                modal.style.display = 'block';
+            }
+
+            executeRecall(proposal) {
+                const summary = this.memory.getSummary(proposal.memory_id);
+                if (summary) {
+                    this.log(`RECALL: Integrating '[${proposal.topic}]'...`);
+                    // We need to re-send the original intent or a confirmation.
+                    // For flow simplicity, we send a system confirmation
+                    this.sendText(`[SYSTEM: USER CONFIRMED RECALL OF '${proposal.topic}']`, summary);
+                }
             }
 
             resize() {
@@ -399,35 +569,23 @@
                 this.bus.subscribe('INTENT_CHANGE', (data) => {
                     this.state = data.state;
                     this.updateUI(data);
-                    this.log(`INTENT: ${data.state} (${data.hex})`);
-
-                    if (data.audio) {
-                         this.log(`AUDIO: Rhythm=${data.audio.rhythm_density} | Texture=${data.audio.tone_texture}`);
-                    }
                 });
             }
 
             handleTap(e) {
                 this.lastInteraction = Date.now();
-
-                // Wake loop if sleeping
                 if (this.isSleeping) {
                     this.isSleeping = false;
                     this.render();
                 }
-
-                // If Awake, Tap triggers manifestation demo
                 if (this.state === 'AWAKE' || this.state === 'LOGENESIS') {
                     this.manifest();
                     return;
                 }
-
                 if (this.state === 'MANIFESTATION') {
-                     // Return to cloud
                      this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
                      return;
                 }
-
                 if (this.state !== 'NIRODHA') return;
 
                 this.tapCount++;
@@ -440,22 +598,11 @@
             }
 
             wake() {
-                // 1. Calculate Intent Bias BEFORE updating memory
                 const snapshot = this.memory.getSnapshot();
                 this.currentBias = IntentResolver.calculateBias(snapshot);
-
-                // 2. Update Memory
                 this.memory.recordAwakening();
-
-                // 3. Log System State
                 this.log("RITUAL: Sequence Verified.");
-                this.log(`MEMORY: Cycle #${snapshot.awakening_count + 1}`);
-                this.log(`SYSTEM BIAS: Inertia=${this.currentBias.inertia} | Integration=${this.currentBias.integration}`);
-
-                if (this.currentBias.inertia > 0.5) {
-                    this.log("SYSTEM: Cold Start Inertia Detected. Warming up.");
-                }
-
+                this.log("HINT: Press Ctrl+Enter for Input");
                 document.getElementById('ritual-layer').style.display = 'none';
                 document.getElementById('ui-layer').style.opacity = '1';
                 this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
@@ -463,21 +610,13 @@
 
             manifest() {
                 if (this.state === 'MANIFESTATION') return;
-
-                // Volition check (System Inertia)
-                // Base 30% refusal + Inertia factor
                 const refusalChance = 0.3 + (this.currentBias.inertia * 0.5);
-
                 if (Math.random() < refusalChance) {
-                    this.log(`SYSTEM: Inertia High. Current cycle prioritizes internal reconciliation.`);
+                    this.log(`SYSTEM: Inertia High. Refused.`);
                     return;
                 }
-
                 this.log("MANIFEST: Biometric Lock Engaged.");
                 this.bus.publish('INTENT_CHANGE', { state: 'MANIFESTATION', hex: '#64C8FF', phi: 0.99 });
-
-                // Map particles to targets
-                // Shuffle for organic effect
                 const shuffled = [...this.particles].sort(() => 0.5 - Math.random());
                 shuffled.forEach((p, index) => {
                     const target = this.faceTargets[index % this.faceTargets.length];
@@ -505,13 +644,11 @@
                 document.getElementById('intent-tag').innerText = data.state;
                 document.getElementById('intent-tag').style.color = data.hex;
                 document.getElementById('status-glow').style.background = data.hex;
-
                 let narrative = "VOID";
                 const pct = data.phi * 100;
                 if (pct > 0 && pct <= 30) narrative = "NEBULA";
                 else if (pct <= 70) narrative = "RESONANCE";
                 else if (pct < 100) narrative = "MANIFESTATION";
-
                 document.getElementById('phi-val').innerText = narrative;
                 document.getElementById('phi-bar').style.width = pct + '%';
             }
@@ -526,29 +663,23 @@
             }
 
             render() {
-                // Check if deep sleep needed
                 if (this.state === 'NIRODHA' && this.tapCount === 0) {
                      const activeParticles = this.particles.filter(p => p.alpha > 0.01).length;
                      if (activeParticles === 0) {
                          this.isSleeping = true;
                          this.ctx.fillStyle = '#050505';
                          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-                         return; // Stop loop
+                         return;
                      }
                 }
-
-                // Clear / Fade
                 this.ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-                // Idle check
                 const idleTime = Date.now() - this.lastInteraction;
                 const isDrifting = (this.state !== 'NIRODHA' && this.state !== 'MANIFESTATION' && idleTime > 5000);
 
-                // Voice simulation if manifested
                 if (this.state === 'MANIFESTATION') {
                     const time = Date.now() * 0.005;
-                    // Random bursts of speech
                     const amp = (Math.sin(time) * 0.3) + (Math.random() > 0.8 ? Math.random() * 0.5 : 0);
                     this.speak(amp);
                 }
@@ -564,7 +695,6 @@
             }
         }
 
-        // Start
         const app = new GunUI();
     </script>
 </body>

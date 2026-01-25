@@ -55,6 +55,25 @@ class PhysicsParams(BaseModel):
     velocity_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0], description="[x, y] flow bias")
     decay_rate: float = Field(default=0.01, description="How fast particles fade")
 
+class MemoryIndexItem(BaseModel):
+    """
+    Metadata for a memory item stored on the client.
+    Sent to the server to check for relevance without revealing full content.
+    """
+    id: str = Field(..., description="Unique identifier for the memory")
+    topic: str = Field(..., description="The main topic/keyword")
+    timestamp: datetime = Field(..., description="When this memory was created")
+    confidence: float = Field(default=1.0, description="Relevance score (client-side)")
+
+class RecallProposal(BaseModel):
+    """
+    A proposal from the server to the user to recall a specific memory.
+    """
+    memory_id: str = Field(..., description="The ID of the memory to recall")
+    topic: str = Field(..., description="The topic being recalled")
+    reasoning: str = Field(..., description="Why the system suggests recalling this (e.g., 'You mentioned X...')")
+    question: str = Field(..., description="The text to display to the user (e.g., 'Do you want to recall...?')")
+
 class LogenesisResponse(BaseModel):
     """
     The holistic response packet from LOGENESIS Engine.
@@ -67,3 +86,4 @@ class LogenesisResponse(BaseModel):
     audio_qualia: Optional[AudioQualia] = None
     physics_params: Optional[PhysicsParams] = None
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
+    recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
