@@ -44,8 +44,11 @@ def test_physics_tick():
     lcl.tick(0.1)
 
     # New x = 0.5 + 0.1 * 0.1 = 0.51
+    # Logic applies friction (0.95) BEFORE position update
+    # vx = 0.1 * 0.95 = 0.095
+    # x = 0.5 + 0.095 * 0.1 = 0.5095
     assert entity.position[0] > 0.5
-    assert abs(entity.position[0] - 0.51) < 0.0001
+    assert abs(entity.position[0] - 0.5095) < 0.0001
     # Velocity should decay: 0.1 * 0.95 = 0.095
     assert entity.velocity[0] < 0.1
     assert abs(entity.velocity[0] - 0.095) < 0.0001
