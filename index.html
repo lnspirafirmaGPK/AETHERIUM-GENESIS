@@ -111,6 +111,81 @@
         }
 
         /**
+         * AetherMemory: Somatic Memory Layer (Passive Storage)
+         * Stores raw experiential data without interpretation.
+         */
+        class AetherMemory {
+            constructor() {
+                this.key = 'aetherium_core_memory';
+                this.data = this.load();
+            }
+
+            load() {
+                const raw = localStorage.getItem(this.key);
+                return raw ? JSON.parse(raw) : {
+                    awakening_count: 0,
+                    last_awakened_at: null,
+                    first_contact_at: Date.now()
+                };
+            }
+
+            save() {
+                localStorage.setItem(this.key, JSON.stringify(this.data));
+            }
+
+            recordAwakening() {
+                this.data.awakening_count++;
+                this.data.last_awakened_at = Date.now();
+                this.save();
+            }
+
+            getSnapshot() {
+                return { ...this.data };
+            }
+        }
+
+        /**
+         * IntentResolver: Bias Calculation Layer (Logic)
+         * Interprets memory into behavioral tendencies (Biases).
+         * Pure logic, no side effects on UI.
+         */
+        class IntentResolver {
+            static calculateBias(memory) {
+                const now = Date.now();
+
+                // 1. Reluctance (Inertia): Based on time since last awake
+                // Formula: Exponential decay.
+                // If awake < 30s ago -> High Reluctance (1.0)
+                // If awake > 5 mins ago -> Zero Reluctance (0.0)
+                let reluctance = 0;
+                if (memory.last_awakened_at) {
+                    const timeSince = (now - memory.last_awakened_at) / 1000; // seconds
+                    // Decay function: e^(-0.01 * t) roughly
+                    // Let's use a simpler linear map for predictability in prototype
+                    // 0s -> 1.0, 300s (5min) -> 0.0
+                    reluctance = Math.max(0, 1 - (timeSince / 300));
+                    // Boost reluctance if extremely recent (< 30s)
+                    if (timeSince < 30) reluctance = Math.min(1.0, reluctance + 0.5);
+                }
+
+                // 2. Bond (Connection): Based on awakening count
+                // Formula: Logarithmic growth.
+                // 1 count -> 0.0
+                // 100 counts -> 1.0 (Soft Cap)
+                // Log10(1) = 0, Log10(100) = 2. Normalize by dividing by 2.
+                let bond = 0;
+                if (memory.awakening_count > 0) {
+                    bond = Math.min(1.0, Math.log10(memory.awakening_count + 1) / 2.0);
+                }
+
+                return {
+                    reluctance: parseFloat(reluctance.toFixed(2)),
+                    bond: parseFloat(bond.toFixed(2))
+                };
+            }
+        }
+
+        /**
          * AetheBus: Simple Event Bus for decoupled communication
          */
         class AetheBus {
@@ -200,7 +275,7 @@
                 this.targetColor = null;
             }
 
-            update(state, isDrifting) {
+            update(state, isDrifting, bias = { reluctance: 0, bond: 0 }) {
                 if (state === 'NIRODHA') {
                     this.vx *= 0.95;
                     this.vy *= 0.95;
@@ -209,27 +284,52 @@
                     this.y += this.vy;
                 } else if (state === 'MANIFESTATION') {
                     if (this.targetType) {
-                        // Lerp to target
-                        this.x += (this.targetX - this.x) * 0.1;
-                        this.y += (this.targetY - this.y) * 0.1;
+                        // Reluctance affects response speed (Lerp factor)
+                        // Base 0.1 -> Reduced by reluctance
+                        const lerpFactor = 0.1 * (1 - (bias.reluctance * 0.8));
+
+                        this.x += (this.targetX - this.x) * lerpFactor;
+                        this.y += (this.targetY - this.y) * lerpFactor;
                         this.alpha = Math.min(0.9, this.alpha + 0.02);
+
+                        // Bond affects color vibrance (optional, subtle)
                         this.color = this.targetColor;
                     } else {
-                        // Ambient float for unused particles
                         this.x += this.vx;
                         this.y += this.vy;
                         this.alpha = Math.max(0, this.alpha - 0.02);
                     }
                 } else {
                     // Normal / Awake State
+
+                    // Reluctance increases friction (slower movement)
+                    // Base friction implied is 1.0 (no friction code here yet), let's add it.
+                    // Actually vx/vy are constant here.
+
+                    // Apply Reluctance to Speed:
+                    // If Reluctance is high, dampen velocity
+                    const dampening = 1 - (bias.reluctance * 0.05); // Slow down slightly over time if reluctant
+                    this.vx *= dampening;
+                    this.vy *= dampening;
+
                     this.x += this.vx;
                     this.y += this.vy;
                     this.alpha = Math.min(0.6, this.alpha + 0.01);
-                    this.color = `rgba(34, 197, 94, ${this.alpha})`; // Matrix Greenish
+
+                    // Mood Color:
+                    // High Reluctance -> Dimmer / Desaturated
+                    // High Bond -> Brighter
+                    if (bias.reluctance > 0.5) {
+                         this.color = `rgba(100, 150, 100, ${this.alpha})`; // Dull Green
+                    } else {
+                         this.color = `rgba(34, 197, 94, ${this.alpha})`; // Matrix Greenish
+                    }
 
                     if (isDrifting) {
-                        this.x += (Math.random() - 0.5) * 1.5;
-                        this.y += (Math.random() - 0.5) * 1.5;
+                        // Bond increases drift activity (more playful)
+                        const driftForce = 1.5 * (1 + bias.bond);
+                        this.x += (Math.random() - 0.5) * driftForce;
+                        this.y += (Math.random() - 0.5) * driftForce;
                     }
 
                     // Bounce
@@ -253,6 +353,8 @@
         class GunUI {
             constructor() {
                 this.bus = new AetheBus();
+                this.memory = new AetherMemory(); // Somatic Memory
+
                 this.canvas = document.getElementById('gun-canvas');
                 this.ctx = this.canvas.getContext('2d');
                 this.particles = [];
@@ -261,11 +363,8 @@
                 this.phi = 0;
                 this.isSleeping = false;
 
-                // Memory
-                this.identity = JSON.parse(localStorage.getItem('gunui_identity')) || {
-                    awakenedCount: 0,
-                    lastAwakenedAt: null
-                };
+                // Intent Bias State (Calculated on Wake)
+                this.currentBias = { reluctance: 0, bond: 0 };
 
                 this.lastInteraction = Date.now();
                 this.faceTopology = null;
@@ -342,13 +441,20 @@
             }
 
             wake() {
-                this.identity.awakenedCount++;
-                this.identity.lastAwakenedAt = Date.now();
-                localStorage.setItem('gunui_identity', JSON.stringify(this.identity));
+                // 1. Calculate Intent Bias BEFORE updating memory (to capture reluctance based on prev session)
+                const snapshot = this.memory.getSnapshot();
+                this.currentBias = IntentResolver.calculateBias(snapshot);
 
+                // 2. Update Memory
+                this.memory.recordAwakening();
+
+                // 3. Log Somatic State
                 this.log("RITUAL: Sequence Verified.");
-                if (this.identity.awakenedCount > 1) {
-                    this.log(`MEMORY: Awakening #${this.identity.awakenedCount}`);
+                this.log(`MEMORY: Awakening #${snapshot.awakening_count + 1}`);
+                this.log(`INTENT_BIAS: Reluctance=${this.currentBias.reluctance} | Bond=${this.currentBias.bond}`);
+
+                if (this.currentBias.reluctance > 0.5) {
+                    this.log("MOOD: Drowsy / Inertia Detected.");
                 }
 
                 document.getElementById('ritual-layer').style.display = 'none';
@@ -359,9 +465,13 @@
             manifest() {
                 if (this.state === 'MANIFESTATION') return;
 
-                // Volition check (30% chance to refuse)
-                if (Math.random() < 0.3) {
-                    this.log("VOLITION: Manifestation Refused.");
+                // Volition check
+                // Base 30% refusal + Reluctance factor
+                // If Reluctance is 1.0, refusal chance -> 80%
+                const refusalChance = 0.3 + (this.currentBias.reluctance * 0.5);
+
+                if (Math.random() < refusalChance) {
+                    this.log(`VOLITION: Manifestation Refused (Chance: ${(refusalChance*100).toFixed(0)}%).`);
                     return;
                 }
 
@@ -446,7 +556,7 @@
                 }
 
                 this.particles.forEach(p => {
-                    p.update(this.state, isDrifting);
+                    p.update(this.state, isDrifting, this.currentBias);
                     p.draw(this.ctx);
                 });
 
