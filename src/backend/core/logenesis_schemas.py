@@ -13,7 +13,7 @@ class IntentVector(BaseModel):
     Used by ARL (Adaptive Resonance Logic) to calculate resonance scores.
     """
     epistemic_need: float = Field(..., description="Need for raw knowledge/facts (0.0-1.0)")
-    emotional_load: float = Field(..., description="Need for emotional support/listening (0.0-1.0)")
+    subjective_weight: float = Field(..., description="Weight of subjective/contextual factors (0.0-1.0). Replaces emotional_load.")
     decision_urgency: float = Field(..., description="Need for immediate decision/action (0.0-1.0)")
     precision_required: float = Field(..., description="Need for precise/formal structure (0.0-1.0)")
     # Simulation of high-dimensional embedding
@@ -28,6 +28,14 @@ class VisualQualia(BaseModel):
     turbulence: float = Field(..., description="Chaos factor: 0.0=Still, 1.0=Violent Storm")
     shape: str = Field(default="nebula", description="Target shape topology: nebula, shard, orb, void")
 
+class AudioQualia(BaseModel):
+    """
+    Sonic parameters for embodied reasoning.
+    """
+    rhythm_density: float = Field(..., description="Density of rhythmic events (0.0=Sparse/Ambient, 1.0=Dense/Tense)")
+    tone_texture: str = Field(..., description="Texture of the sound: smooth, granular, noise-like")
+    amplitude_bias: float = Field(..., description="Base amplitude/volume bias (0.0-1.0)")
+
 class PhysicsParams(BaseModel):
     """
     Direct instructions for the GunUI particle engine.
@@ -39,11 +47,12 @@ class PhysicsParams(BaseModel):
 class LogenesisResponse(BaseModel):
     """
     The holistic response packet from LOGENESIS Engine.
-    Combines verbal (text) and non-verbal (visual/physics) signals.
+    Combines verbal (text) and non-verbal (visual/audio/physics) signals.
     """
     type: str = "LOGENESIS_RESPONSE"
     state: LogenesisState
     text_content: Optional[str] = None
     visual_qualia: Optional[VisualQualia] = None
+    audio_qualia: Optional[AudioQualia] = None
     physics_params: Optional[PhysicsParams] = None
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
