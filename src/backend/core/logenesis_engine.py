@@ -135,6 +135,12 @@ class LogenesisEngine:
     The Adaptive Resonance Engine.
     Manages state (Awake/Nirodha) and generates holistic responses.
     Implements 'State Drift' logic for fluid personality adaptation.
+
+    This module conforms to:
+    The Book of Formation – Intent to Motion Canon
+
+    No formation logic is implemented here.
+    All parameters are interpreted according to the external canon.
     """
     def __init__(self):
         self.state = LogenesisState.VOID
