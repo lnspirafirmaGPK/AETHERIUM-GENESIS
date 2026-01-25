@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
 from .light_schemas import LightIntent
+from .visual_schemas import VisualParameters
 
 class LogenesisState(str, Enum):
     VOID = "VOID"
@@ -99,3 +100,4 @@ class LogenesisResponse(BaseModel):
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
     recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
     light_intent: Optional[LightIntent] = None # Direct bridge to LCL
+    visual_analysis: Optional[VisualParameters] = None # New high-fidelity intent vector
