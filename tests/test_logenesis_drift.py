@@ -81,5 +81,5 @@ def test_response_tone_adaptation(clean_state_store):
     response = engine.process("What is the status?", session_id=session_id)
 
     # Expect formal language
-    assert "Alignment" in response.text_content or "Structured" in response.text_content
+    assert "alignment" in response.text_content or "Structure" in response.text_content
     assert "System nominal" not in response.text_content # Should choose the precision path

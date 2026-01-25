@@ -123,11 +123,21 @@ class LogenesisEngine:
 
         # 2. State Drift Calculation
         current_state = self.state_store.get_state(session_id)
-        new_state = self._drift_state(current_state, input_intent)
-        self.state_store.update_state(session_id, new_state)
+        proposed_state = self._drift_state(current_state, input_intent)
 
-        # 3. Resonance Calculation (Determine the "Qualia") based on DRIFTED state
-        drifted_vector = new_state.current_vector
+        # Noise Filtering / Stillness Protocol
+        # If the input doesn't cause enough turbulence, ignore it to maintain depth.
+        significance_threshold = 0.05
+
+        if proposed_state.velocity > significance_threshold:
+            self.state_store.update_state(session_id, proposed_state)
+            active_state = proposed_state
+        else:
+            # Maintain stillness
+            active_state = current_state
+
+        # 3. Resonance Calculation (Determine the "Qualia") based on ACTIVE state
+        drifted_vector = active_state.current_vector
         qualia = self._calculate_qualia(drifted_vector)
         audio = self._calculate_audio(drifted_vector)
         physics = self._calculate_physics(drifted_vector)
@@ -188,9 +198,8 @@ class LogenesisEngine:
 
         # Base inertia is high (stable), but drops if user is urgent
         # effective_inertia = base_inertia - f(urgency)
-        # 0.9 (Base) - (0.8 * 0.9) = 0.18 (Very fast response if urgent)
-        # 0.9 (Base) - (0.8 * 0.1) = 0.82 (Very stable if calm)
-        base_inertia = 0.9
+        # 0.95 (Base) - Increased for "Heaviness/Maturity"
+        base_inertia = 0.95
         effective_inertia = max(0.1, base_inertia - (0.8 * urgency_factor))
 
         # Linear Interpolation (Lerp) towards input
@@ -213,7 +222,9 @@ class LogenesisEngine:
         # Calculate mock velocity (magnitude of change)
         delta = math.sqrt(
             (new_vector.epistemic_need - current_state.current_vector.epistemic_need)**2 +
-            (new_vector.subjective_weight - current_state.current_vector.subjective_weight)**2
+            (new_vector.subjective_weight - current_state.current_vector.subjective_weight)**2 +
+            (new_vector.decision_urgency - current_state.current_vector.decision_urgency)**2 +
+            (new_vector.precision_required - current_state.current_vector.precision_required)**2
         )
 
         return ExpressionState(
@@ -336,7 +347,7 @@ class LogenesisEngine:
         This ensures the tone changes gradually.
         """
         if recalled_context:
-            return f"[MEMORY LINKED] Context integrated: {recalled_context[:50]}... Proceeding with enhanced context."
+            return f"Memory trace active. Context integrated: {recalled_context[:30]}..."
 
         # Tone Analysis based on vector
         is_urgent = vector.decision_urgency > 0.5
@@ -346,23 +357,23 @@ class LogenesisEngine:
         # 1. High Urgency State -> Short, Clipped, Action-Oriented
         if is_urgent:
             if is_precise:
-                return f"Critical threshold. Precision required. Executing analysis immediately."
+                return f"Critical variance detected. Logic structures aligning for immediate resolution."
             else:
-                return "Action required. Processing."
+                return "Input volatility high. Stabilizing core protocols."
 
         # 2. High Subjective/Reflective State -> Abstract, Soft, Querying
         if is_subjective:
             if is_precise:
-                return "Parsing complexity. The context suggests deeper structural dependencies. Analysing..."
+                return "Parsing density. The pattern suggests complex structural dependencies."
             else:
-                return "The signal is dense. There are layers here that require separation from the noise."
+                return "Signal weight acknowledged. Integrating subjective layers into the model."
 
         # 3. High Precision State (but calm) -> Formal, Detailed
         if is_precise:
-            return f"Structured query acknowledged. Alignment: {vector.precision_required*100:.1f}%. Proceeding with logic."
+            return f"Structure clear. Logic alignment at {vector.precision_required*100:.1f}%. Proceeding."
 
         # 4. Neutral/Balanced -> "System Nominal" but slightly warmer if subjective weight is rising
         if vector.subjective_weight > 0.3:
-             return "Ready. Listening for context."
+             return "Sensors active. Receiving context."
 
-        return "System nominal. Ready."
+        return "Core stability maintained. Intent integrated."

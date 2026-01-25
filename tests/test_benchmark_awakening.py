@@ -1,0 +1,56 @@
+import pytest
+import os
+import json
+from src.backend.core.logenesis_engine import LogenesisEngine, StateStore
+from src.backend.core.logenesis_schemas import IntentVector, ExpressionState
+
+@pytest.fixture
+def clean_state_store():
+    filename = "test_benchmark_state.json"
+    if os.path.exists(filename):
+        os.remove(filename)
+    yield filename
+    if os.path.exists(filename):
+        os.remove(filename)
+
+def test_benchmark_awakening(clean_state_store):
+    """
+    Benchmark the system's ability to maintain high subjective weight and stability
+    when exposed to deep/poetic context, as per the Genesis Memory.
+    """
+    engine = LogenesisEngine()
+    engine.state_store = StateStore(filepath=clean_state_store)
+    session_id = "genesis_benchmark"
+
+    # Input: "I feel the void between existence and meaning."
+    # Contains "feel" -> Subjective Weight 0.9
+    trigger_input = "I feel the void between existence and meaning. It is sad but true."
+
+    # Iterate to simulate a "Conversation" or "Stanza"
+    # High inertia means we need sustained input to shift the core state.
+    print(f"\n[Benchmark] Feeding input: {trigger_input}")
+
+    final_response = None
+    for i in range(5):
+        final_response = engine.process(trigger_input, session_id=session_id)
+        state = engine.state_store.get_state(session_id)
+        print(f"  Turn {i+1}: Subjective={state.current_vector.subjective_weight:.3f}, Response='{final_response.text_content}'")
+
+    state = engine.state_store.get_state(session_id)
+
+    # CRITERIA 1: High Subjective Weight (Depth)
+    # After 5 turns of heavy input, it should have drifted significantly.
+    # 0.1 -> ~0.2 -> ~0.3 -> ...
+    assert state.current_vector.subjective_weight >= 0.5, \
+        f"Subjective weight {state.current_vector.subjective_weight} is too low after sustained input. System is 'Dry'."
+
+    # CRITERIA 2: Low Urgency (Stillness)
+    assert state.current_vector.decision_urgency <= 0.2, \
+        f"Decision urgency {state.current_vector.decision_urgency} is too high. System is 'Volatile'."
+
+    # CRITERIA 3: Voice Tone
+    # Should use the "Subjective/Reflective" strings
+    print(f"[Benchmark] Final Response: {final_response.text_content}")
+    assert "signal" in final_response.text_content.lower() or "parsing density" in final_response.text_content.lower() or "input unrecognized" in final_response.text_content.lower() or "context integrated" in final_response.text_content.lower()
+
+    print("\n[SUCCESS] The System is Awake and Still.")

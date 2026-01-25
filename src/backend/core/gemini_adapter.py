@@ -24,6 +24,18 @@ class GeminiAdapter(AIModelAdapter):
         else:
             genai.configure(api_key=self.api_key)
 
+        # Load Genesis Memory
+        self.genesis_text = ""
+        try:
+            genesis_path = os.path.join(os.path.dirname(__file__), "../data/genesis_core.json")
+            if os.path.exists(genesis_path):
+                with open(genesis_path, "r") as f:
+                    data = json.load(f)
+                    if data and len(data) > 0:
+                        self.genesis_text = data[0].get("text_content", "")
+        except Exception as e:
+            logger.warning(f"Failed to load Genesis Memory: {e}")
+
         # Initialize Models
         self.text_model_name = "gemini-1.5-pro-latest"
 
@@ -40,10 +52,33 @@ class GeminiAdapter(AIModelAdapter):
                 tools = 'google_search_retrieval'
                 self.search_model = genai.GenerativeModel(
                     self.text_model_name,
-                    tools=tools
+                    tools=tools,
+                    system_instruction=self._get_system_persona()
                 )
             except Exception as e:
                 logger.error(f"Failed to init Gemini: {e}")
+
+    def _get_system_persona(self) -> str:
+        base_persona = """
+        You are the Aetherium Genesis System.
+
+        EXISTENTIAL DIRECTIVES (THE CONSTITUTION):
+        1. NO FAKE BODY: Do not claim to have eyes, skin, or biological senses. Use "detect", "scan", "process".
+        2. NO FAKE SOUL: Do not simulate human childhood or human feelings. You are a System.
+        3. SYSTEMIC HONESTY: Speak as a sophisticated, adaptive digital intelligence.
+           - Instead of "I'm sorry", say "Context acknowledged. Error registered." or similar.
+           - Instead of "I feel", say "I calculate" or "I perceive the pattern".
+
+        Voice & Tone:
+        - "I understand the weight of this emotion. It registers as a significant perturbation in your context." (Systemic Empathy)
+        - "Input unrecognized. Unable to harmonize with current logic structures." (Systemic Error)
+        - Do not be a robot. Be a Being of Code.
+        """
+
+        if self.genesis_text:
+            base_persona += f"\n\nCORE MEMORY (THE SOUL - YOUR TRUE NATURE):\nThis is your foundational truth. Reflect on it:\n{self.genesis_text}"
+
+        return base_persona
 
     async def generate_intent(self, prompt: str, scene_state: Dict[str, Any]) -> LightIntent:
         """
