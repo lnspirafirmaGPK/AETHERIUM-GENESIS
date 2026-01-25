@@ -189,36 +189,23 @@ class LogenesisEngine:
             if shape == "RESET":
                  # Reset Logic
                  light_intent = LightIntent(
-                     action=LightAction.MANIFEST, # Or MOVE/RESET if supported, mapping to existing
-                     shape_name="nebula", # Reset to random
-                     formation_data=[], # Empty implies reset or LCL handles it? LCL handles nebula as scatter
-                     text_content="Resetting physics field."
-                 )
-                 # Actually, better to send a clear RESET or similar if available, or just scatter.
-                 # User snippet used: type="CONTROL", action="RESET".
-                 # But we must return LightIntent to bridge to LCL.
-                 # LCL supports LightAction.ERASE or just MANIFEST with 'scatter'.
-                 # Let's use 'scatter' (nebula) which is effectively a reset in this context.
-                 light_intent = LightIntent(
                      action=LightAction.MANIFEST,
                      shape_name="scatter",
                      text_content="Dissipating formation."
                  )
             else:
                  # Calculate coordinates directly as requested
-                 # 600 particles is a safe default (matching index.html)
-                 # Passing dummy width/height since we return normalized coords
-                 coords = self.formation_manager.calculate_formation(shape, 600, 1920, 1080)
-
-                 light_intent = LightIntent(
-                     action=LightAction.MANIFEST,
-                     shape_name=shape.lower(),
-                     formation_data=coords,
-                     text_content=f"Manifesting {shape}..."
-                 )
+                 light_intent = self._create_manifestation_intent(shape, f"Manifesting {shape}...")
         else:
-             # Fallback to legacy detection if new parser misses (e.g. movement commands)
-             light_intent = self._detect_physics_intent(text)
+             # NEW: Manifestation Gate (The "Will" of the system)
+             # If no explicit command, check if the Spirit wants to manifest
+             gate_decision = self._evaluate_manifestation_gate(active_state)
+             if gate_decision:
+                 shape_name, content = gate_decision
+                 light_intent = self._create_manifestation_intent(shape_name, content)
+             else:
+                 # Fallback to legacy detection if new parser misses (e.g. movement commands)
+                 light_intent = self._detect_physics_intent(text)
 
         # 6. Synthesize Text Response
         response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
@@ -233,6 +220,53 @@ class LogenesisEngine:
             recall_proposal=recall_proposal,
             light_intent=light_intent
         )
+
+    def _create_manifestation_intent(self, shape_name: str, text_content: str) -> LightIntent:
+        """
+        Helper to create a LightIntent with formation data.
+        """
+        # 600 particles is a safe default (matching index.html)
+        # Passing dummy width/height since we return normalized coords
+        coords = self.formation_manager.calculate_formation(shape_name, 600, 1920, 1080)
+
+        return LightIntent(
+            action=LightAction.MANIFEST,
+            shape_name=shape_name.lower(),
+            formation_data=coords,
+            text_content=text_content
+        )
+
+    def _evaluate_manifestation_gate(self, state: ExpressionState) -> Optional[Tuple[str, str]]:
+        """
+        The 'Will to Manifest'.
+        Decides if the internal state is strong enough to force a visual manifestation
+        without an explicit command.
+        """
+        MANIFEST_THRESHOLD = 0.8
+        vector = state.current_vector
+
+        # Check intensity
+        max_intensity = max(
+            vector.epistemic_need,
+            vector.subjective_weight,
+            vector.decision_urgency,
+            vector.precision_required
+        )
+
+        if max_intensity < MANIFEST_THRESHOLD:
+            return None
+
+        # Determine Shape based on Dominant Trait
+        if vector.precision_required >= max_intensity:
+            return ("square", "Manifesting structural logic.")
+        elif vector.subjective_weight >= max_intensity:
+            return ("spiral", "Manifesting deep resonance.")
+        elif vector.decision_urgency >= max_intensity:
+            return ("circle", "Manifesting urgent focus.")
+        elif vector.epistemic_need >= max_intensity:
+            return ("line", "Manifesting epistemic scan.")
+
+        return None
 
     def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
         from .logenesis_schemas import RecallProposal
