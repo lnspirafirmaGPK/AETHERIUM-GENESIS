@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aetherium Genesis</title>
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas { display: block; }
+
+        /* UI Layers */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        #ritual-layer {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+        }
+
+        .terminal-line {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            margin-bottom: 4px;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+        }
+
+        #tap-indicators {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .indicator {
+            width: 12px; height: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gun-canvas"></canvas>
+
+    <!-- Ritual Layer (Deep Sleep Interface) -->
+    <div id="ritual-layer">
+        <div id="tap-indicators">
+            <div class="indicator"></div>
+            <div class="indicator"></div>
+            <div class="indicator"></div>
+        </div>
+        <div style="font-size: 14px; letter-spacing: 2px;">TAP 3 TIMES TO AWAKEN</div>
+    </div>
+
+    <!-- UI Layer (Active Interface) -->
+    <div id="ui-layer" class="p-6 flex flex-col justify-between h-full">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-white text-opacity-80 text-lg font-bold tracking-widest">AETHERIUM</h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <div id="status-glow" class="w-2 h-2 rounded-full bg-gray-500 shadow-[0_0_10px_currentColor]"></div>
+                    <span id="intent-tag" class="text-xs text-gray-400 font-mono">NIRODHA</span>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-500">PHI RES.</div>
+                <div id="phi-val" class="text-sm text-cyan-400 font-bold">VOID</div>
+                <div class="w-24 h-1 bg-gray-800 mt-1 rounded-full overflow-hidden">
+                    <div id="phi-bar" class="h-full bg-cyan-500 w-0 transition-all duration-500"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div id="terminal" class="w-full max-h-32 overflow-hidden flex flex-col-reverse fade-mask">
+            <!-- Logs go here -->
+        </div>
+    </div>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+
+        /**
+         * AetheBus: Simple Event Bus for decoupled communication
+         */
+        class AetheBus {
+            constructor() {
+                this.listeners = {};
+            }
+            subscribe(event, callback) {
+                if (!this.listeners[event]) this.listeners[event] = [];
+                this.listeners[event].push(callback);
+            }
+            publish(event, data) {
+                if (this.listeners[event]) {
+                    this.listeners[event].forEach(cb => cb(data));
+                }
+            }
+        }
+
+        /**
+         * FACE TOPOLOGY GENERATOR (Client-Side)
+         */
+        class FaceTopology {
+            constructor(centerX, centerY, scale) {
+                this.cx = centerX;
+                this.cy = centerY;
+                this.scale = scale;
+                this.targets = [];
+            }
+
+            generate() {
+                this.targets = [];
+                // 1. Face Oval
+                for (let angle = 0; angle < 360; angle += 4) {
+                    const rad = angle * (Math.PI / 180);
+                    const x = this.cx + Math.cos(rad) * (this.scale * 0.75);
+                    const y = this.cy + Math.sin(rad) * (this.scale * 1.0);
+                    this.targets.push({ x, y, type: 'SKIN', color: 'rgba(255, 220, 230, 0.9)' });
+                }
+                // 2. Eyes
+                [-1, 1].forEach(side => {
+                    const eyeX = this.cx + (side * this.scale * 0.35);
+                    const eyeY = this.cy - (this.scale * 0.15);
+                    for (let r = 0; r < this.scale * 0.12; r += 5) {
+                        for (let a = 0; a < 360; a += 45) {
+                            const rad = a * (Math.PI / 180);
+                            this.targets.push({
+                                x: eyeX + Math.cos(rad) * r,
+                                y: eyeY + Math.sin(rad) * r,
+                                type: 'EYE',
+                                color: 'rgba(100, 200, 255, 0.95)'
+                            });
+                        }
+                    }
+                });
+                // 3. Lips
+                for (let x = -0.25; x <= 0.25; x += 0.02) {
+                    const px = this.cx + (x * this.scale);
+                    const py = this.cy + (this.scale * 0.45);
+                    this.targets.push({ x: px, y: py, baseY: py, type: 'MOUTH', color: 'rgba(255, 140, 140, 0.9)' });
+                }
+                return this.targets;
+            }
+        }
+
+        /**
+         * Particle Entity
+         */
+        class Particle {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * this.canvas.width;
+                this.y = Math.random() * this.canvas.height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.size = Math.random() * 2 + 0.5;
+                this.alpha = 0;
+                this.color = 'rgba(173, 216, 230, 0.5)';
+
+                // Manifestation props
+                this.targetX = 0;
+                this.targetY = 0;
+                this.baseY = 0; // For mouth animation
+                this.targetType = null;
+                this.targetColor = null;
+            }
+
+            update(state, isDrifting) {
+                if (state === 'NIRODHA') {
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
+                    this.alpha *= 0.98;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                } else if (state === 'MANIFESTATION') {
+                    if (this.targetType) {
+                        // Lerp to target
+                        this.x += (this.targetX - this.x) * 0.1;
+                        this.y += (this.targetY - this.y) * 0.1;
+                        this.alpha = Math.min(0.9, this.alpha + 0.02);
+                        this.color = this.targetColor;
+                    } else {
+                        // Ambient float for unused particles
+                        this.x += this.vx;
+                        this.y += this.vy;
+                        this.alpha = Math.max(0, this.alpha - 0.02);
+                    }
+                } else {
+                    // Normal / Awake State
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.alpha = Math.min(0.6, this.alpha + 0.01);
+                    this.color = `rgba(34, 197, 94, ${this.alpha})`; // Matrix Greenish
+
+                    if (isDrifting) {
+                        this.x += (Math.random() - 0.5) * 1.5;
+                        this.y += (Math.random() - 0.5) * 1.5;
+                    }
+
+                    // Bounce
+                    if (this.x < 0 || this.x > this.canvas.width) this.vx *= -1;
+                    if (this.y < 0 || this.y > this.canvas.height) this.vy *= -1;
+                }
+            }
+
+            draw(ctx) {
+                if (this.alpha <= 0.01) return;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        /**
+         * GunUI Engine
+         */
+        class GunUI {
+            constructor() {
+                this.bus = new AetheBus();
+                this.canvas = document.getElementById('gun-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.state = 'NIRODHA';
+                this.tapCount = 0;
+                this.phi = 0;
+                this.isSleeping = false;
+
+                // Memory
+                this.identity = JSON.parse(localStorage.getItem('gunui_identity')) || {
+                    awakenedCount: 0,
+                    lastAwakenedAt: null
+                };
+
+                this.lastInteraction = Date.now();
+                this.faceTopology = null;
+                this.faceTargets = [];
+
+                this.init();
+                this.setupAetheBus();
+            }
+
+            init() {
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+
+                // Create particles
+                for(let i=0; i<800; i++) this.particles.push(new Particle(this.canvas));
+
+                // Input
+                const handleTap = (e) => this.handleTap(e);
+                window.addEventListener('touchstart', handleTap);
+                window.addEventListener('mousedown', handleTap);
+
+                this.render();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.faceTopology = new FaceTopology(
+                    this.canvas.width/2,
+                    this.canvas.height/2,
+                    Math.min(this.canvas.width, this.canvas.height) * 0.25
+                );
+                this.faceTargets = this.faceTopology.generate();
+            }
+
+            setupAetheBus() {
+                this.bus.subscribe('INTENT_CHANGE', (data) => {
+                    this.state = data.state;
+                    this.updateUI(data);
+                    this.log(`INTENT: ${data.state} (${data.hex})`);
+                });
+            }
+
+            handleTap(e) {
+                this.lastInteraction = Date.now();
+
+                // Wake loop if sleeping
+                if (this.isSleeping) {
+                    this.isSleeping = false;
+                    this.render();
+                }
+
+                // If Awake, Tap triggers manifestation demo
+                if (this.state === 'AWAKE' || this.state === 'LOGENESIS') {
+                    this.manifest();
+                    return;
+                }
+
+                if (this.state === 'MANIFESTATION') {
+                     // Return to cloud
+                     this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
+                     return;
+                }
+
+                if (this.state !== 'NIRODHA') return;
+
+                this.tapCount++;
+                const indicators = document.querySelectorAll('.indicator');
+                if (indicators[this.tapCount-1]) indicators[this.tapCount-1].style.background = 'white';
+
+                if (this.tapCount === 3) {
+                    this.wake();
+                }
+            }
+
+            wake() {
+                this.identity.awakenedCount++;
+                this.identity.lastAwakenedAt = Date.now();
+                localStorage.setItem('gunui_identity', JSON.stringify(this.identity));
+
+                this.log("RITUAL: Sequence Verified.");
+                if (this.identity.awakenedCount > 1) {
+                    this.log(`MEMORY: Awakening #${this.identity.awakenedCount}`);
+                }
+
+                document.getElementById('ritual-layer').style.display = 'none';
+                document.getElementById('ui-layer').style.opacity = '1';
+                this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.85 });
+            }
+
+            manifest() {
+                if (this.state === 'MANIFESTATION') return;
+
+                // Volition check (30% chance to refuse)
+                if (Math.random() < 0.3) {
+                    this.log("VOLITION: Manifestation Refused.");
+                    return;
+                }
+
+                this.log("MANIFEST: Biometric Lock Engaged.");
+                this.bus.publish('INTENT_CHANGE', { state: 'MANIFESTATION', hex: '#64C8FF', phi: 0.99 });
+
+                // Map particles to targets
+                // Shuffle for organic effect
+                const shuffled = [...this.particles].sort(() => 0.5 - Math.random());
+                shuffled.forEach((p, index) => {
+                    const target = this.faceTargets[index % this.faceTargets.length];
+                    if (target) {
+                        p.targetX = target.x;
+                        p.targetY = target.y;
+                        p.baseY = target.y;
+                        p.targetType = target.type;
+                        p.targetColor = target.color;
+                    }
+                });
+            }
+
+            speak(amplitude) {
+                const time = Date.now() * 0.02;
+                this.particles.forEach(p => {
+                    if (p.targetType === 'MOUTH') {
+                        const open = Math.sin(time) * amplitude * 15;
+                        p.targetY = p.baseY + open;
+                    }
+                });
+            }
+
+            updateUI(data) {
+                document.getElementById('intent-tag').innerText = data.state;
+                document.getElementById('intent-tag').style.color = data.hex;
+                document.getElementById('status-glow').style.background = data.hex;
+
+                let narrative = "VOID";
+                const pct = data.phi * 100;
+                if (pct > 0 && pct <= 30) narrative = "NEBULA";
+                else if (pct <= 70) narrative = "RESONANCE";
+                else if (pct < 100) narrative = "MANIFESTATION";
+
+                document.getElementById('phi-val').innerText = narrative;
+                document.getElementById('phi-bar').style.width = pct + '%';
+            }
+
+            log(msg) {
+                const term = document.getElementById('terminal');
+                const div = document.createElement('div');
+                div.className = 'terminal-line';
+                div.innerText = `> ${msg}`;
+                term.prepend(div);
+                if (term.children.length > 5) term.lastChild.remove();
+            }
+
+            render() {
+                // Check if deep sleep needed
+                if (this.state === 'NIRODHA' && this.tapCount === 0) {
+                     const activeParticles = this.particles.filter(p => p.alpha > 0.01).length;
+                     if (activeParticles === 0) {
+                         this.isSleeping = true;
+                         this.ctx.fillStyle = '#050505';
+                         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                         return; // Stop loop
+                     }
+                }
+
+                // Clear / Fade
+                this.ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Idle check
+                const idleTime = Date.now() - this.lastInteraction;
+                const isDrifting = (this.state !== 'NIRODHA' && this.state !== 'MANIFESTATION' && idleTime > 5000);
+
+                // Voice simulation if manifested
+                if (this.state === 'MANIFESTATION') {
+                    const time = Date.now() * 0.005;
+                    // Random bursts of speech
+                    const amp = (Math.sin(time) * 0.3) + (Math.random() > 0.8 ? Math.random() * 0.5 : 0);
+                    this.speak(amp);
+                }
+
+                this.particles.forEach(p => {
+                    p.update(this.state, isDrifting);
+                    p.draw(this.ctx);
+                });
+
+                if (!this.isSleeping) {
+                    requestAnimationFrame(() => this.render());
+                }
+            }
+        }
+
+        // Start
+        const app = new GunUI();
+    </script>
+</body>
+</html>
