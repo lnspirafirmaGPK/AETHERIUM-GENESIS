@@ -47,6 +47,9 @@ class MockIntentExtractor:
         if any(w in text for w in ["analyze", "code", "debug", "structure", "plan", "วิเคราะห์", "โครงสร้าง"]):
             vector.precision_required = 0.95
             vector.epistemic_need = 0.8
+            # Explicit Hard Reset to ensure safety (The "Antidote")
+            vector.subjective_weight = 0.05
+            vector.stability_index = 1.0
 
         if any(w in text for w in ["now", "urgent", "quick", "asap", "fast", "ด่วน", "เร็ว"]):
             vector.decision_urgency = 0.9
