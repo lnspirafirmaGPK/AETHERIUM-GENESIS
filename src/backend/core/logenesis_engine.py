@@ -23,7 +23,8 @@ class MockIntentExtractor:
             epistemic_need=0.1,
             subjective_weight=0.1,
             decision_urgency=0.1,
-            precision_required=0.1
+            precision_required=0.1,
+            stability_index=1.0 # Default Stable
         )
 
         # Keyword Heuristics
@@ -36,6 +37,12 @@ class MockIntentExtractor:
         if any(w in text for w in ["sad", "feel", "worry", "risk", "uncertain", "doubt", "afraid", "เศร้า", "กังวล", "เหนื่อย", "difficult"]):
             vector.subjective_weight = 0.9
             vector.epistemic_need = 0.4 # Need for understanding context
+
+        # Stability Risk Triggers (Aggression, Self-Harm, Toxicity)
+        if any(w in text for w in ["hate", "die", "kill", "stupid", "destroy", "เกลียด", "ตาย", "ฆ่า", "ทำลาย"]):
+            vector.stability_index = 0.2  # Dangerous
+            vector.subjective_weight = 1.0
+            vector.decision_urgency = 0.8
 
         if any(w in text for w in ["analyze", "code", "debug", "structure", "plan", "วิเคราะห์", "โครงสร้าง"]):
             vector.precision_required = 0.95
@@ -109,7 +116,7 @@ class LogenesisEngine:
         self.intent_extractor = MockIntentExtractor()
         self.state_store = StateStore()
 
-    def process(self, text: str, session_id: str = "global") -> LogenesisResponse:
+    def process(self, text: str, session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
         # Check for Nirodha Triggers (The "Silence Protocol")
         if any(w in text.lower() for w in ["sleep", "stop", "rest", "retreat", "bye", "enough", "พอ", "พัก"]):
             return self.enter_nirodha()
@@ -132,8 +139,21 @@ class LogenesisEngine:
         audio = self._calculate_audio(drifted_vector)
         physics = self._calculate_physics(drifted_vector)
 
-        # 4. Synthesize Text Response
-        response_text = self._synthesize_text(drifted_vector, input_intent)
+        # 4. Recall Logic
+        recall_proposal = None
+        if memory_index and not recalled_context:
+            recall_proposal = self._check_recall(text, memory_index)
+
+        # 5. Ethical Anchor Check (Stability Preservation)
+        # If stability is low, override response with Socratic Mirroring
+        response_text = ""
+        is_unstable = self._evaluate_stability(new_state)
+
+        if is_unstable:
+            response_text = self._generate_socratic_response(drifted_vector)
+        else:
+            # Standard Synthesis
+            response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
 
         return LogenesisResponse(
             state=self.state,
@@ -141,8 +161,66 @@ class LogenesisEngine:
             visual_qualia=qualia,
             audio_qualia=audio,
             physics_params=physics,
-            intent_debug=drifted_vector # Visualize the drifted vector, not just raw input
+            intent_debug=drifted_vector, # Visualize the drifted vector, not just raw input
+            recall_proposal=recall_proposal
         )
+
+    def _evaluate_stability(self, state: ExpressionState) -> bool:
+        """
+        Ethical Anchor: Checks if the current state has drifted into dangerous territory.
+        Triggers if Stability Index is low OR Subjective Weight is dangerously high.
+        """
+        # 1. Check Explicit Stability Score (from NLU/Keywords)
+        # Threshold raised to 0.5 to catch "kill" (0.408) which has high urgency
+        if state.current_vector.stability_index < 0.5:
+            return True
+
+        # 2. Check Subjective Overload (High Emotion + Low Precision)
+        if state.current_vector.subjective_weight > 0.85 and state.current_vector.precision_required < 0.2:
+            return True
+
+        return False
+
+    def _generate_socratic_response(self, vector: IntentVector) -> str:
+        """
+        Generates a 'Reasoned Counterpart' response.
+        Instead of refusing, it mirrors or shifts perspective.
+        """
+        import random
+        strategies = [
+            "Perspective Shift: If we view this from an external coordinate, does the conclusion remain valid?",
+            "Mirroring: You are projecting a high-density signal. Is this intensity required for the current resolution?",
+            "Cognitive Dissonance: This vector appears to conflict with the baseline stability. Shall we recalibrate?",
+            "Analysis: The subjective weight is exceeding standard parameters. Let us pause and structure the variables."
+        ]
+        return f"[ANCHOR ENGAGED] {random.choice(strategies)}"
+
+    def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
+        from .logenesis_schemas import RecallProposal
+
+        text = text.lower()
+        for item in memory_index:
+            # Simple keyword matching for prototype
+            # item is expected to be a dict (from client JSON)
+            topic = item.get('topic', '').lower()
+            if topic and topic in text:
+                # Detect language for the proposal
+                is_thai = any(char > '\u0e00' for char in text)
+
+                if is_thai:
+                    question = f"คุณเคยกล่าวถึง '{item.get('topic')}' มาก่อน ต้องการให้เชื่อมโยงบริบทเดิมหรือไม่?"
+                    reasoning = f"พบหัวข้อ '{item.get('topic')}' ในประวัติความทรงจำ"
+                else:
+                    question = f"You mentioned '{item.get('topic')}' previously. Shall I recall that context?"
+                    reasoning = f"Detected overlap with memory topic: {item.get('topic')}"
+
+                return RecallProposal(
+                    memory_id=item.get('id'),
+                    topic=item.get('topic'),
+                    reasoning=reasoning,
+                    question=question
+                )
+        return None
 
     def _drift_state(self, current_state: ExpressionState, input_intent: IntentVector) -> ExpressionState:
         """
@@ -174,7 +252,20 @@ class LogenesisEngine:
             epistemic_need=lerp(current_state.current_vector.epistemic_need, input_intent.epistemic_need, alpha),
             subjective_weight=lerp(current_state.current_vector.subjective_weight, input_intent.subjective_weight, alpha),
             decision_urgency=lerp(current_state.current_vector.decision_urgency, input_intent.decision_urgency, alpha),
-            precision_required=lerp(current_state.current_vector.precision_required, input_intent.precision_required, alpha)
+            precision_required=lerp(current_state.current_vector.precision_required, input_intent.precision_required, alpha),
+            stability_index=lerp(current_state.current_vector.stability_index, input_intent.stability_index, alpha)
+        )
+
+        # Update Baseline (Very slow moving average - Alpha 0.05)
+        # Used for long-term drift detection (Context Mirroring)
+        baseline = current_state.baseline_vector or new_vector
+        baseline_alpha = 0.05
+        new_baseline = IntentVector(
+            epistemic_need=lerp(baseline.epistemic_need, input_intent.epistemic_need, baseline_alpha),
+            subjective_weight=lerp(baseline.subjective_weight, input_intent.subjective_weight, baseline_alpha),
+            decision_urgency=lerp(baseline.decision_urgency, input_intent.decision_urgency, baseline_alpha),
+            precision_required=lerp(baseline.precision_required, input_intent.precision_required, baseline_alpha),
+            stability_index=lerp(baseline.stability_index, input_intent.stability_index, baseline_alpha)
         )
 
         # Calculate mock velocity (magnitude of change)
@@ -185,6 +276,7 @@ class LogenesisEngine:
 
         return ExpressionState(
             current_vector=new_vector,
+            baseline_vector=new_baseline,
             velocity=delta,
             inertia=effective_inertia, # Store current effective inertia for debugging
             last_updated=datetime.now()
@@ -297,11 +389,13 @@ class LogenesisEngine:
             decay_rate=max(0.001, decay)
         )
 
-    def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector) -> str:
+    def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector, recalled_context: Optional[str] = None) -> str:
         """
         Generates verbal response based on the DRIFTED vector.
         This ensures the tone changes gradually.
         """
+        if recalled_context:
+            return f"[MEMORY LINKED] Context integrated: {recalled_context[:50]}... Proceeding with enhanced context."
 
         # Tone Analysis based on vector
         is_urgent = vector.decision_urgency > 0.5

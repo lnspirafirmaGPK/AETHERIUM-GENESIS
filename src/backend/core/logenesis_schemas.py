@@ -17,6 +17,7 @@ class IntentVector(BaseModel):
     subjective_weight: float = Field(..., description="Weight of subjective/contextual factors (0.0-1.0). Replaces emotional_load.")
     decision_urgency: float = Field(..., description="Need for immediate decision/action (0.0-1.0)")
     precision_required: float = Field(..., description="Need for precise/formal structure (0.0-1.0)")
+    stability_index: float = Field(default=1.0, description="Ethical Stability Score (0.0=Volatile/Risk, 1.0=Stable)")
     # Simulation of high-dimensional embedding
     raw_embedding: Optional[List[float]] = Field(default=None, description="Mock 512-dim vector")
 
@@ -26,6 +27,7 @@ class ExpressionState(BaseModel):
     This replaces static 'Personas'. It drifts based on interaction pressure.
     """
     current_vector: IntentVector = Field(..., description="The current smoothed expression vector")
+    baseline_vector: Optional[IntentVector] = Field(default=None, description="Long-term moving average of intent (The 'Center')")
     velocity: float = Field(default=0.0, description="Rate of change in the vector (Volatility)")
     inertia: float = Field(default=0.8, description="Current resistance to change (0.1=Fluid, 0.9=Rigid)")
     last_updated: datetime = Field(default_factory=datetime.now, description="Last interaction timestamp")
@@ -55,6 +57,25 @@ class PhysicsParams(BaseModel):
     velocity_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0], description="[x, y] flow bias")
     decay_rate: float = Field(default=0.01, description="How fast particles fade")
 
+class MemoryIndexItem(BaseModel):
+    """
+    Metadata for a memory item stored on the client.
+    Sent to the server to check for relevance without revealing full content.
+    """
+    id: str = Field(..., description="Unique identifier for the memory")
+    topic: str = Field(..., description="The main topic/keyword")
+    timestamp: datetime = Field(..., description="When this memory was created")
+    confidence: float = Field(default=1.0, description="Relevance score (client-side)")
+
+class RecallProposal(BaseModel):
+    """
+    A proposal from the server to the user to recall a specific memory.
+    """
+    memory_id: str = Field(..., description="The ID of the memory to recall")
+    topic: str = Field(..., description="The topic being recalled")
+    reasoning: str = Field(..., description="Why the system suggests recalling this (e.g., 'You mentioned X...')")
+    question: str = Field(..., description="The text to display to the user (e.g., 'Do you want to recall...?')")
+
 class LogenesisResponse(BaseModel):
     """
     The holistic response packet from LOGENESIS Engine.
@@ -67,3 +88,4 @@ class LogenesisResponse(BaseModel):
     audio_qualia: Optional[AudioQualia] = None
     physics_params: Optional[PhysicsParams] = None
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
+    recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
