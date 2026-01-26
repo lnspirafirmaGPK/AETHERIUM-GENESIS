@@ -1,9 +1,20 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 from datetime import datetime
+from dataclasses import dataclass
+import torch
+
 from .light_schemas import LightIntent
 from .visual_schemas import VisualParameters
+
+@dataclass
+class IntentPacket:
+    modality: Literal["text", "visual"]
+    embedding: Optional[torch.Tensor]
+    energy_level: float
+    confidence: float
+    raw_payload: Any
 
 class LogenesisState(str, Enum):
     VOID = "VOID"
