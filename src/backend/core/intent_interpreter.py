@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
-from .visual_schemas import VisualParameters
+from .visual_schemas import EmbodimentContract
 
 class IntentInterpreter(ABC):
     """
-    Abstract Base Class for interpreting natural language into VisualParameters.
+    Abstract Base Class for interpreting natural language into EmbodimentContract.
     Follows the 'Visual Translator' role described in Aetherium Genesis.
     """
 
     @abstractmethod
-    async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> VisualParameters:
+    async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> EmbodimentContract:
         """
-        Translates the user's text (and optional context) into a VisualParameters object.
+        Translates the user's text (and optional context) into an EmbodimentContract object.
         """
         pass

@@ -143,6 +143,25 @@
     </div>
 
     <script>
+        /**
+         * AETHERIUM LIGHT RECALL PROTOCOL (Phase 2)
+         *
+         * Architectural Directives:
+         * 1. RECALL_DRAFT: Abstract geometric manifestation (Sphere/Vortex). No FaceTopology.
+         * 2. RECALL_CONFIRM: User interaction (Hold) + Voice Feedback.
+         * 3. RECALL_EXECUTE: Pulse/Flash -> Action.
+         *
+         * LEGACY RECALL MODAL:
+         * Architectural fossil. Preserved for regression testing only.
+         * Must never be reachable in production flow.
+         */
+        const ENABLE_LEGACY_RECALL = false; // DEBUG ONLY
+
+        // Light Recall States
+        const STATE_RECALL_DRAFT = 'RECALL_DRAFT';
+        const STATE_RECALL_CONFIRM = 'RECALL_CONFIRM';
+        const STATE_RECALL_EXECUTE = 'RECALL_EXECUTE';
+
         // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -300,6 +319,35 @@
         }
 
         /**
+         * DRAFT TOPOLOGY GENERATOR (Abstract)
+         * Creates a Vortex/Spiral shape for the Draft state.
+         * Pure geometric abstraction - no anthropomorphic features.
+         */
+        class DraftTopology {
+            constructor(centerX, centerY, scale) {
+                this.cx = centerX;
+                this.cy = centerY;
+                this.scale = scale;
+            }
+            generate(count) {
+                const targets = [];
+                // Golden Spiral Vortex
+                const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                for (let i = 0; i < count; i++) {
+                    const r = this.scale * Math.sqrt(i / count);
+                    const theta = i * goldenAngle;
+
+                    targets.push({
+                        x: this.cx + r * Math.cos(theta),
+                        y: this.cy + r * Math.sin(theta),
+                        type: 'DRAFT'
+                    });
+                }
+                return targets;
+            }
+        }
+
+        /**
          * Particle Entity
          */
         class Particle {
@@ -328,19 +376,37 @@
                     this.alpha *= 0.98;
                     this.x += this.vx;
                     this.y += this.vy;
-                } else if (state === 'MANIFESTATION' || state === 'EXTERNAL_CONTROL') {
-                    // Use target seeking if we have a target set (either Face or External)
-                    // For EXTERNAL_CONTROL, we rely on targetX/Y being set by handleInstruction
-                    const hasTarget = (state === 'MANIFESTATION' && this.targetType) || (state === 'EXTERNAL_CONTROL');
+                } else if (state === 'MANIFESTATION' || state === 'EXTERNAL_CONTROL' ||
+                           state === STATE_RECALL_DRAFT || state === STATE_RECALL_CONFIRM || state === STATE_RECALL_EXECUTE) {
+
+                    // Target Seeking Logic
+                    const isDraft = (state === STATE_RECALL_DRAFT);
+                    const isConfirm = (state === STATE_RECALL_CONFIRM);
+                    const isExecute = (state === STATE_RECALL_EXECUTE);
+
+                    // Determine if we should seek target
+                    // For Light Recall states, we always seek targets (set by DraftTopology)
+                    const hasTarget = (state === 'MANIFESTATION' && this.targetType) ||
+                                      (state === 'EXTERNAL_CONTROL') ||
+                                      isDraft || isConfirm || isExecute;
 
                     if (hasTarget) {
                         // Logenesis Force Physics (Spring/Elastic)
-                        const dx = this.targetX - this.x;
-                        const dy = this.targetY - this.y;
+                        let dx = this.targetX - this.x;
+                        let dy = this.targetY - this.y;
+
+                        // DRAFT: Add subtle noise to target to make it "unstable"
+                        if (isDraft) {
+                            dx += (Math.random() - 0.5) * 5;
+                            dy += (Math.random() - 0.5) * 5;
+                        }
+
+                        // EXECUTE: Stronger pull / Convergence
+                        const force = isExecute ? 0.2 : 0.05;
 
                         // Accelerate towards target
-                        this.vx += dx * 0.05;
-                        this.vy += dy * 0.05;
+                        this.vx += dx * force;
+                        this.vy += dy * force;
 
                         // Apply friction/damping
                         this.vx *= 0.8;
@@ -349,8 +415,24 @@
                         this.x += this.vx;
                         this.y += this.vy;
 
-                        this.alpha = Math.min(0.9, this.alpha + 0.02);
-                        this.color = this.targetColor || '#ffffff';
+                        // Visual Styles per State
+                        if (isDraft) {
+                            // DRAFT: Ghostly, low opacity, wireframe-like
+                            this.alpha = Math.min(0.25, this.alpha + 0.01);
+                            this.color = 'rgba(100, 200, 255, 0.4)'; // Faint Cyan
+                        } else if (isConfirm) {
+                            // CONFIRM: Steady, brighter
+                            this.alpha = Math.min(0.6, this.alpha + 0.02);
+                            this.color = 'rgba(100, 255, 255, 0.8)';
+                        } else if (isExecute) {
+                            // EXECUTE: Flash/Solid
+                            this.alpha = Math.min(1.0, this.alpha + 0.1);
+                            this.color = '#FFFFFF';
+                        } else {
+                            // MANIFESTATION / EXTERNAL
+                            this.alpha = Math.min(0.9, this.alpha + 0.02);
+                            this.color = this.targetColor || '#ffffff';
+                        }
                     } else {
                         this.x += this.vx;
                         this.y += this.vy;
@@ -408,6 +490,20 @@
                 this.ws = null;
                 this.pendingRecall = null; // Store proposal to act on
 
+                // Voice / Interaction
+                this.transcript = '';
+                this.isHolding = false;
+                this.recognition = null;
+                if ('webkitSpeechRecognition' in window) {
+                    this.recognition = new webkitSpeechRecognition();
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = true;
+                    this.recognition.lang = 'en-US';
+                    this.recognition.onresult = (e) => {
+                         this.transcript = e.results[0][0].transcript;
+                    };
+                }
+
                 this.init();
                 this.setupAetheBus();
                 this.setupInput();
@@ -420,25 +516,44 @@
                 for(let i=0; i<800; i++) this.particles.push(new Particle(this.canvas));
 
                 // Touch/Click
-                const handleTap = (e) => {
-                    // Don't trigger tap logic if clicking UI elements
+                const startInput = (e) => {
                     if (e.target.closest('#input-layer') || e.target.closest('#recall-modal')) return;
-                    this.handleTap(e);
+                    this.handleInputStart(e);
                 };
-                window.addEventListener('touchstart', handleTap);
-                window.addEventListener('mousedown', handleTap);
+                const endInput = (e) => {
+                    this.handleInputEnd(e);
+                };
+
+                window.addEventListener('touchstart', startInput);
+                window.addEventListener('mousedown', startInput);
+                window.addEventListener('touchend', endInput);
+                window.addEventListener('mouseup', endInput);
 
                 // Key listener for hidden input
                 window.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && e.ctrlKey) {
-                        // Toggle input layer
-                        const layer = document.getElementById('input-layer');
-                        layer.style.display = layer.style.display === 'block' ? 'none' : 'block';
-                        if (layer.style.display === 'block') document.getElementById('cmd-input').focus();
+                        this.toggleSubsurfaceLayer();
                     }
                 });
 
                 this.render();
+            }
+
+            /**
+             * Sub-surface Interface (non-primary UI)
+             * NOTE: This is a legacy input method conflicting with Light-first design.
+             * It should be treated as a "debug console" or "subconscious layer"
+             * rather than the primary interface.
+             */
+            toggleSubsurfaceLayer(forceState = null) {
+                const layer = document.getElementById('input-layer');
+                const isVisible = layer.style.display === 'block';
+                const newState = forceState !== null ? forceState : !isVisible;
+
+                layer.style.display = newState ? 'block' : 'none';
+                if (newState) {
+                    document.getElementById('cmd-input').focus();
+                }
             }
 
             connect() {
@@ -479,17 +594,18 @@
             setupInput() {
                 const input = document.getElementById('cmd-input');
                 input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
+                    // Only trigger send on plain Enter (allow Ctrl+Enter for toggle)
+                    if (e.key === 'Enter' && !e.ctrlKey) {
                         const text = input.value.trim();
                         if (text) this.sendText(text);
                         input.value = '';
-                        document.getElementById('input-layer').style.display = 'none';
+                        this.toggleSubsurfaceLayer(false);
                     }
                 });
 
                 // Recall Modal Buttons
                 document.getElementById('btn-ignore').addEventListener('click', () => {
-                    document.getElementById('recall-modal').style.display = 'none';
+                    this._closeLegacyRecallModal();
                     this.pendingRecall = null;
                 });
 
@@ -497,7 +613,7 @@
                     if (this.pendingRecall) {
                         this.executeRecall(this.pendingRecall);
                     }
-                    document.getElementById('recall-modal').style.display = 'none';
+                    this._closeLegacyRecallModal();
                 });
             }
 
@@ -548,8 +664,50 @@
 
                 // Handle Recall Proposal
                 if (res.recall_proposal) {
-                    this.showRecallModal(res.recall_proposal);
+                    this.triggerRecallInterface(res.recall_proposal);
                 }
+            }
+
+            /**
+             * PRIMARY RECALL INTERFACE HOOK
+             * This function is a transitional interface.
+             * In future phases, recall will be manifested via Light Protocol (no modal).
+             */
+            triggerRecallInterface(proposal) {
+                if (ENABLE_LEGACY_RECALL) {
+                    this._showLegacyRecallModal(proposal);
+                    return;
+                }
+
+                // LIGHT RECALL FLOW
+                this.pendingRecall = proposal;
+                this.log("MEM: Resonance detected...");
+
+                // Initialize Draft State
+                this.setupDraftTargets();
+
+                this.bus.publish('INTENT_CHANGE', {
+                    state: STATE_RECALL_DRAFT,
+                    hex: '#64C8FF',
+                    phi: 0.5
+                });
+            }
+
+            setupDraftTargets() {
+                if (!this.draftTopology) return;
+                const targets = this.draftTopology.generate(this.particles.length);
+
+                // Shuffle particles to distribute
+                const shuffled = [...this.particles].sort(() => 0.5 - Math.random());
+
+                shuffled.forEach((p, i) => {
+                     if (targets[i]) {
+                         p.targetX = targets[i].x;
+                         p.targetY = targets[i].y;
+                         p.targetType = 'DRAFT';
+                         p.targetColor = '#64C8FF'; // Base Cyan
+                     }
+                });
             }
 
             handleInstruction(instr) {
@@ -591,11 +749,19 @@
                 }
             }
 
-            showRecallModal(proposal) {
+            /**
+             * LEGACY UI: Modal Conflict
+             * TODO: Replace with Light Protocol signal (no DOM overlay)
+             */
+            _showLegacyRecallModal(proposal) {
                 this.pendingRecall = proposal;
                 const modal = document.getElementById('recall-modal');
                 document.getElementById('recall-text').innerText = proposal.question;
                 modal.style.display = 'block';
+            }
+
+            _closeLegacyRecallModal() {
+                document.getElementById('recall-modal').style.display = 'none';
             }
 
             executeRecall(proposal) {
@@ -611,12 +777,21 @@
             resize() {
                 this.canvas.width = window.innerWidth;
                 this.canvas.height = window.innerHeight;
+
+                const minDim = Math.min(this.canvas.width, this.canvas.height);
+
                 this.faceTopology = new FaceTopology(
                     this.canvas.width/2,
                     this.canvas.height/2,
-                    Math.min(this.canvas.width, this.canvas.height) * 0.25
+                    minDim * 0.25
                 );
                 this.faceTargets = this.faceTopology.generate();
+
+                this.draftTopology = new DraftTopology(
+                    this.canvas.width/2,
+                    this.canvas.height/2,
+                    minDim * 0.35
+                );
             }
 
             setupAetheBus() {
@@ -626,8 +801,16 @@
                 });
             }
 
-            handleTap(e) {
+            handleInputStart(e) {
                 this.lastInteraction = Date.now();
+
+                // Light Recall Interaction
+                if (this.state === STATE_RECALL_DRAFT) {
+                    this.isHolding = true;
+                    this.startRecallConfirmation();
+                    return;
+                }
+
                 if (this.isSleeping) {
                     this.isSleeping = false;
                     this.render();
@@ -649,6 +832,50 @@
                 if (this.tapCount === 3) {
                     this.wake();
                 }
+            }
+
+            handleInputEnd(e) {
+                if (this.state === STATE_RECALL_CONFIRM && this.isHolding) {
+                    this.isHolding = false;
+                    this.endRecallConfirmation();
+                }
+            }
+
+            startRecallConfirmation() {
+                this.bus.publish('INTENT_CHANGE', {
+                    state: STATE_RECALL_CONFIRM,
+                    hex: '#00FFFF',
+                    phi: 0.8
+                });
+                this.transcript = "LISTENING...";
+                try {
+                    if (this.recognition) {
+                        this.recognition.start();
+                        this.transcript = "LISTENING...";
+                    }
+                } catch(e) { console.log("Mic error", e); }
+            }
+
+            endRecallConfirmation() {
+                 if (this.recognition) this.recognition.stop();
+
+                 // Transition to Execute
+                 this.bus.publish('INTENT_CHANGE', {
+                    state: STATE_RECALL_EXECUTE,
+                    hex: '#FFFFFF',
+                    phi: 1.0
+                });
+
+                // Execute Logic after animation
+                setTimeout(() => {
+                    if (this.pendingRecall) {
+                        this.executeRecall(this.pendingRecall);
+                    }
+                    // Return to normal
+                    this.bus.publish('INTENT_CHANGE', { state: 'LOGENESIS', hex: '#06b6d4', phi: 0.5 });
+                    // Clean up particles
+                    this.particles.forEach(p => p.targetType = null);
+                }, 1500); // 1.5s flash duration
             }
 
             wake() {
@@ -742,6 +969,18 @@
                     p.update(this.state, isDrifting, this.currentBias);
                     p.draw(this.ctx);
                 });
+
+                // Light Recall Transcript
+                if (this.state === STATE_RECALL_CONFIRM) {
+                    this.ctx.save();
+                    this.ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+                    this.ctx.font = 'bold 14px "Courier New"';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.shadowColor = 'cyan';
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.fillText(this.transcript, this.canvas.width/2, this.canvas.height/2 + 80);
+                    this.ctx.restore();
+                }
 
                 if (!this.isSleeping) {
                     requestAnimationFrame(() => this.render());

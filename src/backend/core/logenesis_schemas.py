@@ -101,3 +101,4 @@ class LogenesisResponse(BaseModel):
     recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
     light_intent: Optional[LightIntent] = None # Direct bridge to LCL
     visual_analysis: Optional[VisualParameters] = None # New high-fidelity intent vector
+    manifestation_granted: bool = Field(default=True, description="Whether the Manifestation Gate permitted this intent to be visualized")

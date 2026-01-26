@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse
+from src.backend.core.visual_schemas import TemporalPhase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")
@@ -54,11 +55,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     text = msg.get("text", "")
                     logger.info(f"Processing Text: {text}")
 
+                    # --- NEW: Immediate Temporal Pulse (Thinking) ---
+                    # Send visual feedback BEFORE processing starts to eliminate stutter
+                    thinking_params = engine.adapter.get_temporal_visuals(TemporalPhase.THINKING)
+                    vp_thinking = thinking_params.model_dump(mode='json')
+
+                    await websocket.send_text(json.dumps({
+                        "type": "VISUAL_PARAMS",
+                        "params": vp_thinking["visual_parameters"],
+                        "meta": {
+                            "category": vp_thinking["intent_category"],
+                            "valence": vp_thinking["emotional_valence"],
+                            "energy": vp_thinking["energy_level"]
+                        }
+                    }))
+                    # -----------------------------------------------
+
                     response: LogenesisResponse = await engine.process(text, session_id=session_id)
 
                     # Convert LogenesisResponse to Client Protocol
-                    # 1. Visual Params
-                    if response.visual_analysis:
+                    # 1. Visual Params (Check Manifestation Gate)
+                    if response.visual_analysis and response.manifestation_granted:
                         # Serialize Pydantic model
                         vp = response.visual_analysis.model_dump(mode='json')
                         # Flat map for the simple UI (or send full object)
@@ -73,6 +90,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "energy": vp["energy_level"]
                             }
                         }))
+                    elif response.visual_analysis and not response.manifestation_granted:
+                         logger.info("Manifestation Gate: Blocked visual update (Conversational Loop)")
 
                     # 2. AI Speak
                     if response.text_content:
