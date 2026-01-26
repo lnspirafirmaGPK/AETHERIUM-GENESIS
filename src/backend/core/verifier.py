@@ -1,14 +1,95 @@
 import logging
 from typing import Dict, Any, Union
-from .visual_schemas import VisualParameters, IntentCategory, BaseShape
+from datetime import datetime
+from .visual_schemas import (
+    VisualParameters, IntentCategory, BaseShape,
+    EmbodimentContract, TemporalState, CognitiveMetadata, IntentData,
+    TemporalPhase, ContractIntentCategory
+)
 
 logger = logging.getLogger("Verifier")
 
 class VisualVerifier:
     """
-    Ensures that the generated VisualParameters are valid and safe.
+    Ensures that the generated VisualParameters or EmbodimentContract are valid and safe.
     Performs clamping and default fallbacks.
     """
+
+    @staticmethod
+    def verify_contract(data: Union[Dict[str, Any], EmbodimentContract]) -> EmbodimentContract:
+        """
+        Validates the input data against the EmbodimentContract schema.
+        """
+        if isinstance(data, EmbodimentContract):
+            return data
+
+        try:
+            return EmbodimentContract(**data)
+        except Exception as e:
+            logger.warning(f"Strict contract validation failed: {e}. Attempting repair.")
+            return VisualVerifier._repair_contract(data)
+
+    @staticmethod
+    def _repair_contract(data: Dict[str, Any]) -> EmbodimentContract:
+        # Defaults
+        default_phase = TemporalPhase.MANIFESTING
+        default_category = ContractIntentCategory.CHIT_CHAT
+
+        # 1. Temporal State
+        ts = data.get("temporal_state", {})
+        if not isinstance(ts, dict): ts = {}
+
+        phase_str = str(ts.get("phase", "MANIFESTING")).upper()
+        if phase_str not in [e.value for e in TemporalPhase]:
+            phase_str = TemporalPhase.MANIFESTING.value
+
+        ts["phase"] = phase_str
+        ts["stability"] = max(0.0, min(float(ts.get("stability", 0.5)), 1.0))
+        ts["duration_ms"] = int(ts.get("duration_ms", 0))
+
+        # 2. Cognitive Metadata
+        cog = data.get("cognitive", {})
+        if not isinstance(cog, dict): cog = {}
+
+        cog["effort"] = max(0.0, min(float(cog.get("effort", 0.5)), 1.0))
+        cog["uncertainty"] = max(0.0, min(float(cog.get("uncertainty", 0.1)), 1.0))
+        cog["latency_factor"] = max(0.0, min(float(cog.get("latency_factor", 0.0)), 1.0))
+
+        # 3. Intent Data
+        in_data = data.get("intent", {})
+        if not isinstance(in_data, dict): in_data = {}
+
+        cat_str = str(in_data.get("category", "CHIT_CHAT")).upper()
+        # Map old categories if present
+        if "CHAT" in cat_str and "CHIT" not in cat_str: cat_str = "CHIT_CHAT"
+        if "REQUEST" in cat_str: cat_str = "ANALYTIC" # Map request to analytic?
+        if cat_str not in [e.value for e in ContractIntentCategory]:
+             cat_str = ContractIntentCategory.CHIT_CHAT.value
+
+        in_data["category"] = cat_str
+        in_data["purity"] = max(0.0, min(float(in_data.get("purity", 0.9)), 1.0))
+
+        # Reconstruct
+        repaired_data = {
+            "contract_version": data.get("contract_version", "1.0"),
+            "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
+            "temporal_state": ts,
+            "cognitive": cog,
+            "intent": in_data,
+            "text_content": data.get("text_content")
+        }
+
+        try:
+            return EmbodimentContract(**repaired_data)
+        except Exception as e:
+            logger.error(f"Contract repair failed: {e}. Returning safe default.")
+            # Absolute fallback
+            return EmbodimentContract(
+                temporal_state=TemporalState(phase=TemporalPhase.ERROR, stability=0.0),
+                cognitive=CognitiveMetadata(effort=0.0, uncertainty=1.0),
+                intent=IntentData(category=ContractIntentCategory.SYSTEM_OPS, purity=0.0),
+                text_content="System Error: Contract Violation"
+            )
 
     @staticmethod
     def verify_and_repair(data: Union[Dict[str, Any], VisualParameters]) -> VisualParameters:
