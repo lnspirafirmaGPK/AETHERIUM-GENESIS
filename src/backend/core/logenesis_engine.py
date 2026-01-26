@@ -134,8 +134,13 @@ class LogenesisEngine:
 
         # 4. Recall Logic
         recall_proposal = None
-        if memory_index and not recalled_context:
-            recall_proposal = self._check_recall(text, memory_index)
+        if memory_index:
+             if isinstance(memory_index, list):
+                 if not recalled_context:
+                    recall_proposal = self._check_recall(text, memory_index)
+             else:
+                 # Warn but don't crash
+                 print(f"Warning: memory_index expected list, got {type(memory_index)}")
 
         # 5. Synthesize Text Response
         response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
@@ -157,6 +162,8 @@ class LogenesisEngine:
         for item in memory_index:
             # Simple keyword matching for prototype
             # item is expected to be a dict (from client JSON)
+            if not isinstance(item, dict):
+                continue
             topic = item.get('topic', '').lower()
             if topic and topic in text:
                 # Detect language for the proposal

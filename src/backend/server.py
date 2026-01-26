@@ -5,6 +5,7 @@ import logging
 import asyncio
 import os
 from typing import List
+from contextlib import asynccontextmanager
 
 # Adjust imports based on execution context (running from repo root)
 try:
@@ -30,17 +31,6 @@ except ImportError:
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("LightTestbed")
-
-app = FastAPI(title="Aetherium Genesis - Light Testbed")
-
-# CORS for frontend access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Initialize Core Components
 lcl = LightControlLogic()
@@ -80,10 +70,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(physics_loop())
-
 async def physics_loop():
     logger.info("Starting Physics Loop")
     while True:
@@ -99,7 +85,37 @@ async def physics_loop():
         except Exception as e:
             logger.error(f"Physics Loop Error: {e}")
 
-        await asyncio.sleep(0.05)
+        # Graceful handling of task cancellation inside the loop
+        try:
+            await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            logger.info("Physics loop cancelled")
+            raise
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up application...")
+    task = asyncio.create_task(physics_loop())
+    yield
+    # Shutdown
+    logger.info("Shutting down application...")
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        logger.info("Physics loop task cancelled successfully")
+
+app = FastAPI(title="Aetherium Genesis - Light Testbed", lifespan=lifespan)
+
+# CORS for frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():
