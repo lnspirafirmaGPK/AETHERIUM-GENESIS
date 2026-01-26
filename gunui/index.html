@@ -43,34 +43,90 @@ let width = canvas.width = window.innerWidth;
 let height = canvas.height = window.innerHeight;
 
 /* State */
-const State = { IDLE:'idle', LISTENING:'listening', PROCESSING:'processing', RESONATING:'resonating' };
+const State = {
+  IDLE: 'idle',
+  RECALL_DRAFT: 'recall_draft',     // Collecting entropy / listening
+  MANIFESTATION: 'manifestation',   // Collapsing to structure
+  STABILIZED: 'stabilized',         // Locked biometric form
+  PROCESSING: 'processing',         // Legacy / Transition
+  RESONATING: 'resonating'          // Legacy / AI Speaking
+};
 let currentState = State.IDLE;
 const statusEl = document.getElementById('status');
 const actuator = document.getElementById('actuator');
 const actDot = document.getElementById('act-dot');
 
+/* Energy Field (Global Physics State) */
+const Energy = {
+    entropy: 0.0,      // 0.0 -> 1.0 (Chaos level)
+    coherence: 0.0,    // 0.0 -> 1.0 (Structure strength)
+    thermalLevel: 0.0  // 0.0 -> 1.0 (Input energy/Load)
+};
+
+/* Manifestation Timer */
+const Manifestation = {
+    t: 0.0,
+    speed: 1.5, // Speed of collapse
+    threshold: 0.65 // Energy required to trigger collapse
+};
+
 function setState(s){
   currentState = s;
-  statusEl.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  statusEl.textContent = s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   actuator.setAttribute('aria-pressed', s !== State.IDLE);
-  if(s === State.IDLE){ actDot.style.transform = 'scale(1)'; actDot.style.boxShadow = '0 0 12px rgba(255,200,120,0.9)'; }
-  if(s === State.LISTENING){ actDot.style.transform = 'scale(1.4)'; actDot.style.boxShadow = '0 0 28px rgba(123,239,255,0.95)'; }
-  if(s === State.PROCESSING){ actDot.style.transform = 'scale(1.1)'; actDot.style.boxShadow = '0 0 18px rgba(255,140,80,0.9)'; }
-  if(s === State.RESONATING){ actDot.style.transform = 'scale(0.9)'; actDot.style.boxShadow = '0 0 40px rgba(255,255,255,0.95)'; }
+
+  // Visual feedback for Actuator Dot based on State
+  if(s === State.IDLE){
+      actDot.style.transform = 'scale(1)';
+      actDot.style.boxShadow = '0 0 12px rgba(255,200,120,0.9)';
+      actDot.style.background = 'rgba(255,255,255,0.9)';
+  }
+  else if(s === State.RECALL_DRAFT){
+      actDot.style.transform = 'scale(1.4)';
+      actDot.style.boxShadow = '0 0 28px rgba(123,239,255,0.6)'; // Blue-ish for potential
+      actDot.style.background = '#7befff';
+  }
+  else if(s === State.MANIFESTATION){
+      actDot.style.transform = 'scale(0.8)'; // Compressing
+      actDot.style.boxShadow = '0 0 40px rgba(255,100,100,0.8)'; // Thermal heat
+      actDot.style.background = '#ff6b6b';
+  }
+  else if(s === State.STABILIZED){
+      actDot.style.transform = 'scale(1.0)';
+      actDot.style.boxShadow = '0 0 15px rgba(255,255,255,0.9)'; // White hot / Stable
+      actDot.style.background = '#ffffff';
+  }
+  else if(s === State.PROCESSING){
+      actDot.style.transform = 'scale(1.1)';
+      actDot.style.boxShadow = '0 0 18px rgba(255,140,80,0.9)';
+  }
 }
 
 /* Particles */
-const PARTICLE_COUNT = 900;
+const PARTICLE_COUNT = 1200; // Increased for density
 const particles = [];
 for(let i=0;i<PARTICLE_COUNT;i++){
   particles.push({
+    // Current Physics
     x: Math.random()*width,
     y: Math.random()*height,
     vx: (Math.random()-0.5)*0.6,
     vy: (Math.random()-0.5)*0.6,
+
+    // Manifestation Props
+    startX: 0, startY: 0,
+    targetX: 0, targetY: 0,
+
+    // Appearance
     size: Math.random()*1.6 + 0.6,
     hue: Math.random()*360,
-    target: null
+    alpha: 0.5,
+    noiseAmp: 0.0,
+
+    // Semantic Tag
+    tag: 'OTHER', // SKIN, EYE, LIP
+    target: null, // Legacy object ref
+    colorTarget: null
   });
 }
 let globalPulse = 0;
@@ -80,7 +136,6 @@ let turbulence = 0.1;
 
 function hexToHue(hex) {
     // Simple naive conversion for demo
-    // In real app, convert RGB to HSL properly
     if(hex.includes('#')) hex = hex.replace('#','');
     const r = parseInt(hex.substring(0,2), 16);
     const g = parseInt(hex.substring(2,4), 16);
@@ -105,49 +160,125 @@ function renderParticles(){
   ctx.fillStyle = 'rgba(0,0,0,0.12)';
   ctx.fillRect(0,0,width,height);
 
-  // Hue LERP
+  // Hue LERP (Legacy)
   baseHue += (targetHue - baseHue) * 0.05;
+  let dt = 0.016; // Approx 60fps
+
+  // --- MANIFESTATION LOGIC ---
+  if(currentState === State.RECALL_DRAFT) {
+      // 1. Monitor Energy for Collapse Trigger
+      Energy.thermalLevel = globalPulse; // Driven by Audio RMS
+      // Trigger Logic: Must have some energy to start collapsing
+      if(Energy.thermalLevel > Manifestation.threshold) {
+          console.log("Manifestation Triggered! Energy:", Energy.thermalLevel);
+          setState(State.MANIFESTATION);
+          Manifestation.t = 0.0;
+      }
+  }
+
+  if(currentState === State.MANIFESTATION) {
+      // 2. Collapse Dynamics
+      Manifestation.t += dt * Manifestation.speed;
+      let t_norm = Math.min(1.0, Manifestation.t);
+
+      // Energy Dynamics
+      Energy.entropy = 0.85 * (1 - t_norm) + 0.05 * t_norm;
+      Energy.coherence = 0.15 * (1 - t_norm) + 1.0 * t_norm;
+
+      if(t_norm >= 1.0) {
+          setState(State.STABILIZED);
+      }
+  }
 
   for(const p of particles){
-    // Update Logic
-    if(currentState === State.RESONATING && p.target){
-      const dx = p.target.x - p.x;
-      const dy = p.target.y - p.y;
+    // A. RECALL DRAFT / MANIFESTATION / STABILIZED PHYSICS
+    if(currentState === State.RECALL_DRAFT || currentState === State.MANIFESTATION || currentState === State.STABILIZED) {
+          let t_norm = (currentState === State.MANIFESTATION) ? Math.min(1.0, Manifestation.t) : (currentState === State.STABILIZED ? 1.0 : 0.0);
 
-      // Attraction to target
-      p.vx += dx * 0.005 * (1 + globalPulse);
-      p.vy += dy * 0.005 * (1 + globalPulse);
+          // 1. Position Collapse (Lerp Start -> Target)
+          // We use smoothstep for organic feel
+          let smoothT = t_norm * t_norm * (3 - 2 * t_norm);
 
-      // Turbulence
-      p.vx += (Math.random()-0.5) * turbulence;
-      p.vy += (Math.random()-0.5) * turbulence;
+          let cx = p.startX + (p.targetX - p.startX) * smoothT;
+          let cy = p.startY + (p.targetY - p.startY) * smoothT;
 
-      // Damping
-      p.vx *= 0.92;
-      p.vy *= 0.92;
+          // 2. Organic Noise (Dampens as we stabilize)
+          let currentNoise = p.noiseAmp * (1.0 - smoothT);
+          if(currentState === State.STABILIZED) currentNoise = 0;
+
+          let nx = (Math.random()-0.5) * currentNoise;
+          let ny = (Math.random()-0.5) * currentNoise;
+
+          p.x = cx + nx;
+          p.y = cy + ny;
+
+          // 3. Color Thermal Transition
+          let h, s, l;
+
+          if(p.colorTarget) {
+               h = p.colorTarget.h;
+               s = p.colorTarget.s;
+               l = p.colorTarget.l;
+
+               // Draft: Desaturated
+               if(currentState === State.RECALL_DRAFT) s *= 0.2;
+               else s = s * 0.2 + s * 0.8 * t_norm; // Bloom saturation
+          } else {
+               h = baseHue; s = 80; l = 60;
+          }
+
+          // Alpha & Size
+          let a = p.alpha + (1.0 - p.alpha) * t_norm;
+          let size = p.size;
+          if(currentState === State.RECALL_DRAFT) size *= 0.8;
+
+          ctx.fillStyle = `hsla(${h}, ${s}%, ${l}%, ${a})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size, 0, Math.PI*2);
+          ctx.fill();
+
     } else {
-      // Idle Drift
-      p.vx += (Math.random()-0.5)*0.08;
-      p.vy += (Math.random()-0.5)*0.08;
+        // B. LEGACY PHYSICS (Idle, Resonating, Processing)
+        // Update Logic
+        if((currentState === State.RESONATING || currentState === State.PROCESSING) && p.target){
+          const dx = p.target.x - p.x;
+          const dy = p.target.y - p.y;
 
-      // Center pull
-      p.vx += (width/2 - p.x) * 0.00001;
-      p.vy += (height/2 - p.y) * 0.00001;
+          // Attraction to target
+          p.vx += dx * 0.005 * (1 + globalPulse);
+          p.vy += dy * 0.005 * (1 + globalPulse);
 
-      p.vx *= 0.99;
-      p.vy *= 0.99;
+          // Turbulence
+          p.vx += (Math.random()-0.5) * turbulence;
+          p.vy += (Math.random()-0.5) * turbulence;
+
+          // Damping
+          p.vx *= 0.92;
+          p.vy *= 0.92;
+        } else {
+          // Idle Drift
+          p.vx += (Math.random()-0.5)*0.08;
+          p.vy += (Math.random()-0.5)*0.08;
+
+          // Center pull
+          p.vx += (width/2 - p.x) * 0.00001;
+          p.vy += (height/2 - p.y) * 0.00001;
+
+          p.vx *= 0.99;
+          p.vy *= 0.99;
+        }
+
+        p.x += p.vx; p.y += p.vy;
+        if(p.x < 0) p.x = width; if(p.x > width) p.x = 0;
+        if(p.y < 0) p.y = height; if(p.y > height) p.y = 0;
+
+        const hue = (baseHue + p.hue * 0.1) % 360; // Base hue dominant
+        const alpha = Math.min(0.95, 0.08 + Math.hypot(p.vx,p.vy)*0.6 + globalPulse*0.25);
+        ctx.fillStyle = `hsla(${hue}, 85%, 60%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + globalPulse*0.6), 0, Math.PI*2);
+        ctx.fill();
     }
-
-    p.x += p.vx; p.y += p.vy;
-    if(p.x < 0) p.x = width; if(p.x > width) p.x = 0;
-    if(p.y < 0) p.y = height; if(p.y > height) p.y = 0;
-
-    const hue = (baseHue + p.hue * 0.1) % 360; // Base hue dominant
-    const alpha = Math.min(0.95, 0.08 + Math.hypot(p.vx,p.vy)*0.6 + globalPulse*0.25);
-    ctx.fillStyle = `hsla(${hue}, 85%, 60%, ${alpha})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * (1 + globalPulse*0.6), 0, Math.PI*2);
-    ctx.fill();
   }
 }
 
@@ -212,7 +343,10 @@ async function startListening(){
   analyser.fftSize = 2048;
   sourceNode.connect(analyser);
   dataArray = new Uint8Array(analyser.frequencyBinCount);
-  setState(State.LISTENING);
+
+  // Start Recall Flow instead of just Listening
+  enterRecallDraft();
+
   listeningStart = performance.now();
   vadLoop();
   sendWS({ type:'INTENT_START', meta:{ ts: Date.now() } });
@@ -224,7 +358,11 @@ function stopListening(){
   if(analyser){ analyser.disconnect(); analyser = null; }
   if(recognition) { try { recognition.stop(); } catch(e){} }
 
-  setState(State.PROCESSING);
+  // If we stabilized, don't go to processing, stay stabilized.
+  // If we are still in draft, go to processing (or cancel).
+  if(currentState !== State.STABILIZED && currentState !== State.MANIFESTATION) {
+      setState(State.PROCESSING);
+  }
 
   // Send recognized text if available
   if(finalTranscript && finalTranscript.length > 0) {
@@ -302,10 +440,91 @@ function applyVisualParams(params){
 
   // 3. Shape Generation (Morphing)
   const shape = params.base_shape || 'cloud';
-  const targets = generateShapeTargets(shape, particles.length);
+
+  let targets;
+  // If we are in Manifestation mode, use Biometric Proxy
+  if(currentState === State.MANIFESTATION || currentState === State.RECALL_DRAFT || currentState === State.STABILIZED) {
+     targets = generateBiometricProxy(particles.length);
+  } else {
+     targets = generateShapeTargets(shape, particles.length);
+  }
 
   setParticleTargetsFromCoords(targets);
-  setState(State.RESONATING);
+  // Only set Resonating if not in new states (Legacy path)
+  if(currentState === State.IDLE || currentState === State.PROCESSING) {
+    setState(State.RESONATING);
+  }
+}
+
+/* Biometric Proxy Generator (Procedural Face) */
+function generateBiometricProxy(count) {
+    const targets = [];
+    const cx = width / 2;
+    const cy = height / 2;
+    const faceScale = Math.min(width, height) * 0.35;
+
+    // Distribution Ratios
+    const eyeCount = Math.floor(count * 0.15); // 15% Eyes
+    const lipCount = Math.floor(count * 0.10); // 10% Lips
+    const skinCount = count - (eyeCount * 2) - lipCount;
+
+    // 1. Eyes (Symmetric Vortices)
+    const eyeSpacing = faceScale * 0.4;
+    const eyeY = cy - faceScale * 0.15;
+    const eyeRadius = faceScale * 0.12;
+
+    for(let i=0; i<eyeCount * 2; i++) {
+        const isRight = i >= eyeCount;
+        const centerX = isRight ? cx + eyeSpacing : cx - eyeSpacing;
+
+        // Vortex Math
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * eyeRadius;
+
+        targets.push({
+            x: centerX + Math.cos(angle) * r,
+            y: eyeY + Math.sin(angle) * r * 0.8, // Slightly flattened
+            tag: 'EYE'
+        });
+    }
+
+    // 2. Lips (Horizontal Wave)
+    const mouthY = cy + faceScale * 0.35;
+    const mouthWidth = faceScale * 0.5;
+
+    for(let i=0; i<lipCount; i++) {
+        const t = i / lipCount; // 0 to 1
+        const x = cx - (mouthWidth/2) + (t * mouthWidth);
+
+        // Simple Sine Wave approximation for lips
+        const wave = Math.sin(t * Math.PI) * (faceScale * 0.05);
+        const y = mouthY + (Math.random() - 0.5) * (faceScale * 0.08) + (i%2==0 ? wave : -wave * 0.5);
+
+        targets.push({
+            x: x,
+            y: y,
+            tag: 'LIP'
+        });
+    }
+
+    // 3. Skin/Shell (Elliptical Cloud)
+    for(let i=0; i<skinCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        // Bias towards edges for shell, center for volume
+        const rRaw = Math.random();
+        const r = (0.4 + Math.pow(rRaw, 0.5) * 0.6) * faceScale;
+
+        const x = cx + Math.cos(angle) * r * 0.85; // Cheeks narrower
+        const y = cy + Math.sin(angle) * r * 1.1;  // Long face
+
+        targets.push({
+            x: x,
+            y: y,
+            tag: 'SKIN'
+        });
+    }
+
+    return targets;
 }
 
 function generateShapeTargets(shape, count) {
@@ -348,7 +567,7 @@ function generateShapeTargets(shape, count) {
              x = cx + Math.cos(angle) * r;
              y = cy + Math.sin(angle) * r * 0.6; // Flattened
         }
-        targets.push({x, y});
+        targets.push({x, y, tag: 'OTHER'});
     }
     return targets;
 }
@@ -356,8 +575,44 @@ function generateShapeTargets(shape, count) {
 function setParticleTargetsFromCoords(coords){
   for(let i=0;i<particles.length;i++){
     const c = coords[i % coords.length];
+    // Legacy support
     particles[i].target = { x: c.x, y: c.y };
+
+    // New Physics support
+    particles[i].targetX = c.x;
+    particles[i].targetY = c.y;
+    particles[i].tag = c.tag || 'OTHER';
+
+    // Set Target Colors based on Tag (Biometric Palettes)
+    if(particles[i].tag === 'EYE') particles[i].colorTarget = {h: 200, s: 90, l: 80}; // Cyan/White
+    else if(particles[i].tag === 'LIP') particles[i].colorTarget = {h: 340, s: 70, l: 65}; // Soft Pink
+    else if(particles[i].tag === 'SKIN') particles[i].colorTarget = {h: 25, s: 60, l: 60}; // Warm Amber
+    else particles[i].colorTarget = {h: 0, s: 0, l: 100}; // White
   }
+}
+
+function enterRecallDraft(){
+    setState(State.RECALL_DRAFT);
+
+    // Reset Energy Field
+    Energy.entropy = 0.85;
+    Energy.coherence = 0.15;
+    Energy.thermalLevel = 0.1;
+
+    Manifestation.t = 0.0;
+
+    // Generate Biometric Targets (The "Draft")
+    const targets = generateBiometricProxy(particles.length);
+    setParticleTargetsFromCoords(targets);
+
+    // Initialize Particles for Draft State
+    for(const p of particles){
+        p.startX = p.x;
+        p.startY = p.y;
+        p.alpha = 0.2; // Ghostly
+        p.noiseAmp = 15.0; // High noise
+        p.color_current = { ...p.colorTarget, s: 0 }; // Desaturated start
+    }
 }
 
 function triggerAIResponse(text){
@@ -379,11 +634,17 @@ actuator.addEventListener('pointerdown', async (e) => {
   e.preventDefault();
   if(currentState === State.IDLE){
     await startListening();
-  } else if(currentState === State.LISTENING){
-    stopListening();
+  } else if(currentState === State.RECALL_DRAFT){
+    stopListening(); // Manual stop
+  } else if(currentState === State.STABILIZED || currentState === State.MANIFESTATION){
+    // Reset from Manifestation
+    setState(State.IDLE);
+    sendWS({ type:'RESET' });
   } else if(currentState === State.RESONATING){
     setState(State.IDLE);
     sendWS({ type:'RESET' });
+  } else if(currentState === State.LISTENING){
+    stopListening();
   }
 });
 
