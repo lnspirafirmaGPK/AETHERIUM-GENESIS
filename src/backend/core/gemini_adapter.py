@@ -146,10 +146,10 @@ class GeminiAdapter(AIModelAdapter):
             # Fallback: Create a text-based image for the description
             # This ensures the "Manifestation" mechanic works even without paid Image API
             logger.info(f"Generating fallback text image for: {description}")
-            image = ImageProcessor.create_text_image(description[:20]) # Limit length
+            image = await asyncio.to_thread(ImageProcessor.create_text_image, description[:20]) # Limit length
 
         # BioVisionNet: Extract Qualia (Particles)
-        particles = ImageProcessor.process_image_to_particles(image, max_particles=250)
+        particles = await asyncio.to_thread(ImageProcessor.process_image_to_particles, image, max_particles=250)
 
         return LightIntent(
             action=LightAction.MANIFEST,
