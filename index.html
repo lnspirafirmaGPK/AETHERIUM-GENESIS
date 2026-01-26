@@ -431,14 +431,28 @@
                 // Key listener for hidden input
                 window.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && e.ctrlKey) {
-                        // Toggle input layer
-                        const layer = document.getElementById('input-layer');
-                        layer.style.display = layer.style.display === 'block' ? 'none' : 'block';
-                        if (layer.style.display === 'block') document.getElementById('cmd-input').focus();
+                        this.toggleSubsurfaceLayer();
                     }
                 });
 
                 this.render();
+            }
+
+            /**
+             * Sub-surface Interface (non-primary UI)
+             * NOTE: This is a legacy input method conflicting with Light-first design.
+             * It should be treated as a "debug console" or "subconscious layer"
+             * rather than the primary interface.
+             */
+            toggleSubsurfaceLayer(forceState = null) {
+                const layer = document.getElementById('input-layer');
+                const isVisible = layer.style.display === 'block';
+                const newState = forceState !== null ? forceState : !isVisible;
+
+                layer.style.display = newState ? 'block' : 'none';
+                if (newState) {
+                    document.getElementById('cmd-input').focus();
+                }
             }
 
             connect() {
@@ -479,17 +493,18 @@
             setupInput() {
                 const input = document.getElementById('cmd-input');
                 input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
+                    // Only trigger send on plain Enter (allow Ctrl+Enter for toggle)
+                    if (e.key === 'Enter' && !e.ctrlKey) {
                         const text = input.value.trim();
                         if (text) this.sendText(text);
                         input.value = '';
-                        document.getElementById('input-layer').style.display = 'none';
+                        this.toggleSubsurfaceLayer(false);
                     }
                 });
 
                 // Recall Modal Buttons
                 document.getElementById('btn-ignore').addEventListener('click', () => {
-                    document.getElementById('recall-modal').style.display = 'none';
+                    this._closeLegacyRecallModal();
                     this.pendingRecall = null;
                 });
 
@@ -497,7 +512,7 @@
                     if (this.pendingRecall) {
                         this.executeRecall(this.pendingRecall);
                     }
-                    document.getElementById('recall-modal').style.display = 'none';
+                    this._closeLegacyRecallModal();
                 });
             }
 
@@ -548,8 +563,19 @@
 
                 // Handle Recall Proposal
                 if (res.recall_proposal) {
-                    this.showRecallModal(res.recall_proposal);
+                    this.triggerRecallInterface(res.recall_proposal);
                 }
+            }
+
+            /**
+             * PRIMARY RECALL INTERFACE HOOK
+             * This function is a transitional interface.
+             * In future phases, recall will be manifested via Light Protocol (no modal).
+             */
+            triggerRecallInterface(proposal) {
+                // FUTURE: Light-based Recall Protocol
+                // Fallback to legacy modal for now
+                this._showLegacyRecallModal(proposal);
             }
 
             handleInstruction(instr) {
@@ -591,11 +617,19 @@
                 }
             }
 
-            showRecallModal(proposal) {
+            /**
+             * LEGACY UI: Modal Conflict
+             * TODO: Replace with Light Protocol signal (no DOM overlay)
+             */
+            _showLegacyRecallModal(proposal) {
                 this.pendingRecall = proposal;
                 const modal = document.getElementById('recall-modal');
                 document.getElementById('recall-text').innerText = proposal.question;
                 modal.style.display = 'block';
+            }
+
+            _closeLegacyRecallModal() {
+                document.getElementById('recall-modal').style.display = 'none';
             }
 
             executeRecall(proposal) {
