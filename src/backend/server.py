@@ -57,8 +57,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     response: LogenesisResponse = await engine.process(text, session_id=session_id)
 
                     # Convert LogenesisResponse to Client Protocol
-                    # 1. Visual Params
-                    if response.visual_analysis:
+                    # 1. Visual Params (Check Manifestation Gate)
+                    if response.visual_analysis and response.manifestation_granted:
                         # Serialize Pydantic model
                         vp = response.visual_analysis.model_dump(mode='json')
                         # Flat map for the simple UI (or send full object)
@@ -73,6 +73,8 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "energy": vp["energy_level"]
                             }
                         }))
+                    elif response.visual_analysis and not response.manifestation_granted:
+                         logger.info("Manifestation Gate: Blocked visual update (Conversational Loop)")
 
                     # 2. AI Speak
                     if response.text_content:
