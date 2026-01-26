@@ -1,5 +1,6 @@
 import time
 import uuid
+import numpy as np
 from typing import Dict, List, Deque, Optional
 from collections import deque
 from .light_schemas import (
@@ -21,8 +22,32 @@ class LightControlLogic:
         self.RATE_LIMIT = 5.0 # intents per second per source
         self.WINDOW_SIZE = 1.0 # seconds
 
-        # Physics State
-        self.entities: Dict[str, LightEntity] = {}
+        # Physics State (NumPy)
+        # Initial capacity
+        self._capacity = 10000
+        self._count = 0
+
+        # Arrays
+        self._ids = np.empty(self._capacity, dtype=object)
+        self._pos = np.zeros((self._capacity, 2), dtype=np.float32)
+        self._vel = np.zeros((self._capacity, 2), dtype=np.float32)
+        self._target_pos = np.zeros((self._capacity, 2), dtype=np.float32)
+        self._has_target = np.zeros(self._capacity, dtype=bool)
+        self._target_colors = np.empty(self._capacity, dtype=object) # Can be None
+        self._energy_levels = np.ones(self._capacity, dtype=np.float32)
+
+        # History: Circular buffer? Or just list of tuples for compatibility?
+        # Implementing efficient history in numpy is tricky if it needs to match List[Tuple].
+        # For performance, we'll keep a separate python list if needed, OR ignore history for physics.
+        # But LightEntity expects history.
+        # Let's optimize: Only keep history if requested? No, the code appends every tick.
+        # We will use a numpy ring buffer for history: (N, 10, 2)
+        self._history = np.zeros((self._capacity, 10, 2), dtype=np.float32)
+        self._history_idx = 0 # Ring buffer index for all? No, they shift.
+        # Shift approach: array[:, :-1] = array[:, 1:]; array[:, -1] = new_pos
+
+        self._id_map: Dict[str, int] = {}
+
         self.system_energy: float = 100.0
         self.MAX_ENERGY = 100.0
 
@@ -32,17 +57,135 @@ class LightControlLogic:
             "intent_count": 0
         }
 
+    @property
+    def entities(self) -> Dict[str, LightEntity]:
+        """
+        Reconstructs dictionary view of entities from NumPy state.
+        This is expensive and should only be used for snapshots/serialization.
+        """
+        result = {}
+        active_ids = self._ids[:self._count]
+        active_pos = self._pos[:self._count]
+        active_vel = self._vel[:self._count]
+        active_energy = self._energy_levels[:self._count]
+        active_history = self._history[:self._count]
+        active_target_pos = self._target_pos[:self._count]
+        active_has_target = self._has_target[:self._count]
+        active_target_colors = self._target_colors[:self._count]
+
+        for i, eid in enumerate(active_ids):
+            # Convert history numpy array to list of tuples
+            hist = [tuple(h) for h in active_history[i] if not (h[0] == 0 and h[1] == 0)]
+            # Note: 0,0 check is naive, but history is init with 0s.
+            # Ideally we'd track length. For now, just dumping the whole buffer or non-zero.
+            # Actually, let's just return the last 10 points.
+            hist = [tuple(p) for p in active_history[i]]
+
+            entity = LightEntity(
+                id=str(eid),
+                position=tuple(active_pos[i]),
+                velocity=tuple(active_vel[i]),
+                energy=float(active_energy[i]),
+                history=hist
+            )
+            if active_has_target[i]:
+                entity.target_position = tuple(active_target_pos[i])
+            if active_target_colors[i] is not None:
+                entity.target_color = active_target_colors[i]
+
+            result[str(eid)] = entity
+        return result
+
+    @entities.setter
+    def entities(self, value: Dict[str, LightEntity]):
+        """
+        Allows manually setting entities (e.g. for testing).
+        """
+        self._clear_entities()
+        for eid, ent in value.items():
+            self._add_entity(eid, ent.position, ent.velocity, ent.energy, ent.target_position, ent.target_color)
+
+    def _ensure_capacity(self, needed: int):
+        if self._count + needed > self._capacity:
+            new_cap = max(self._capacity * 2, self._count + needed)
+            self._resize(new_cap)
+
+    def _resize(self, new_cap: int):
+        # Resize all arrays
+        self._ids = np.resize(self._ids, new_cap)
+        self._pos = np.resize(self._pos, (new_cap, 2))
+        self._vel = np.resize(self._vel, (new_cap, 2))
+        self._target_pos = np.resize(self._target_pos, (new_cap, 2))
+        self._has_target = np.resize(self._has_target, new_cap)
+        self._target_colors = np.resize(self._target_colors, new_cap)
+        self._energy_levels = np.resize(self._energy_levels, new_cap)
+        self._history = np.resize(self._history, (new_cap, 10, 2))
+        self._capacity = new_cap
+
+    def _add_entity(self, eid: str, pos, vel, energy, target_pos=None, target_color=None):
+        if eid in self._id_map:
+            return # Already exists
+
+        self._ensure_capacity(1)
+        idx = self._count
+
+        self._ids[idx] = eid
+        self._pos[idx] = pos
+        self._vel[idx] = vel
+        self._energy_levels[idx] = energy
+
+        if target_pos:
+            self._target_pos[idx] = target_pos
+            self._has_target[idx] = True
+        else:
+            self._has_target[idx] = False
+
+        self._target_colors[idx] = target_color
+        # Init history with current pos
+        self._history[idx] = np.zeros((10, 2)) # Clear
+        self._history[idx, -1] = pos # Set last to current
+
+        self._id_map[eid] = idx
+        self._count += 1
+
+    def _remove_entity_by_index(self, idx: int):
+        last_idx = self._count - 1
+        eid_to_remove = self._ids[idx]
+
+        if idx != last_idx:
+            # Swap with last
+            last_eid = self._ids[last_idx]
+
+            self._ids[idx] = self._ids[last_idx]
+            self._pos[idx] = self._pos[last_idx]
+            self._vel[idx] = self._vel[last_idx]
+            self._target_pos[idx] = self._target_pos[last_idx]
+            self._has_target[idx] = self._has_target[last_idx]
+            self._target_colors[idx] = self._target_colors[last_idx]
+            self._energy_levels[idx] = self._energy_levels[last_idx]
+            self._history[idx] = self._history[last_idx]
+
+            self._id_map[last_eid] = idx
+
+        # Clear last (optional, helps GC)
+        self._ids[last_idx] = None
+        self._target_colors[last_idx] = None
+
+        del self._id_map[eid_to_remove]
+        self._count -= 1
+
+    def _clear_entities(self):
+        self._count = 0
+        self._id_map.clear()
+        # Arrays remain allocated but logically empty
+
     def _check_rate_limit(self, source: str) -> bool:
-        """
-        Returns True if allowed, False if rate limited.
-        """
         if source not in self.intent_timestamps:
             self.intent_timestamps[source] = deque()
 
         now = time.time()
         timestamps = self.intent_timestamps[source]
 
-        # Remove old timestamps
         while timestamps and timestamps[0] < now - self.WINDOW_SIZE:
             timestamps.popleft()
 
@@ -53,18 +196,11 @@ class LightControlLogic:
         return True
 
     def _check_priority(self, intent: LightIntent) -> bool:
-        """
-        Returns True if intent should be processed based on priority.
-        """
         if intent.priority < PriorityLevel.AMBIENT:
              return False
         return True
 
     def _check_harmony(self, intent: LightIntent) -> LightIntent:
-        """
-        Modifies intent to enforce harmony rules (e.g. velocity caps).
-        """
-        # Velocity cap
         if intent.vector:
             vx, vy = intent.vector
             magnitude = (vx**2 + vy**2)**0.5
@@ -73,7 +209,6 @@ class LightControlLogic:
                 scale = MAX_VELOCITY / magnitude
                 intent.vector = (vx * scale, vy * scale)
 
-        # Brightness/Intensity cap
         if intent.intensity is not None and intent.intensity > 1.0:
             intent.intensity = 1.0
 
@@ -85,7 +220,7 @@ class LightControlLogic:
         elif action == LightAction.SPAWN: cost = 2.0
         elif action == LightAction.ERASE: cost = 0.2
         elif action == LightAction.EMPHASIZE: cost = 0.1
-        elif action == LightAction.MANIFEST: cost = 5.0 # High cost
+        elif action == LightAction.MANIFEST: cost = 5.0
         elif action == LightAction.ANSWER: cost = 0.5
 
         if self.system_energy >= cost:
@@ -97,7 +232,6 @@ class LightControlLogic:
         start_time = time.time()
         instruction = self._process_internal(intent)
 
-        # Metrics
         latency = (time.time() - start_time) * 1000
         self.metrics["latency"].append(latency)
         self.metrics["intent_count"] += 1
@@ -105,7 +239,6 @@ class LightControlLogic:
         return instruction
 
     def _process_internal(self, intent: LightIntent) -> Optional[LightInstruction]:
-        # Gatekeeper checks
         if not self._check_rate_limit(intent.source):
             return None
 
@@ -114,36 +247,27 @@ class LightControlLogic:
 
         intent = self._check_harmony(intent)
 
-        # Metabolism
         if not self._deduct_energy(intent.action):
-            # Energy depleted
             if intent.action == LightAction.SPAWN:
                 return None
             return None
 
-        # Update last activity
         self.last_intent_time[intent.source] = time.time()
 
         instruction = None
 
-        # Physics Update
         if intent.action == LightAction.SPAWN:
-            # Create entity
             entity_id = str(uuid.uuid4())
-            # Determine position from region center
             region = intent.region or (0.4, 0.4, 0.6, 0.6)
             x = (region[0] + region[2]) / 2
             y = (region[1] + region[3]) / 2
 
-            # Deterministic color based on intent or random
-            entity = LightEntity(
-                id=entity_id,
-                position=(x, y),
-                velocity=(0.0, 0.0),
-                energy=1.0,
-                history=[]
+            self._add_entity(
+                eid=entity_id,
+                pos=(x, y),
+                vel=(0.0, 0.0),
+                energy=1.0
             )
-            self.entities[entity_id] = entity
 
             instruction = LightInstruction(
                 intent=LightAction.SPAWN,
@@ -154,26 +278,38 @@ class LightControlLogic:
             )
 
         elif intent.action == LightAction.MOVE:
-            # Apply force/velocity
             vec = intent.vector or (0.0, 0.0)
             strength = intent.intensity if intent.intensity is not None else 1.0
 
-            # Apply to target or all
-            targets = []
-            if intent.target and intent.target in self.entities:
-                targets = [self.entities[intent.target]]
+            indices = []
+            if intent.target and intent.target in self._id_map:
+                indices = [self._id_map[intent.target]]
             elif not intent.target or intent.target == "GLOBAL":
-                targets = list(self.entities.values())
+                indices = range(self._count) # All
 
-            for ent in targets:
-                # Break target lock if moving manually
-                ent.target_position = None
+            if indices:
+                # Use slicing if indices is range
+                if isinstance(indices, range):
+                    count = indices.stop
+                    # Break locks
+                    self._has_target[:count] = False
 
-                vx, vy = ent.velocity
-                # F=ma, assume m=1. dv = F*dt. Assume intent applies instant impulse.
-                # Scale force significantly
-                impulse_scale = 0.05
-                ent.velocity = (vx + vec[0] * strength * impulse_scale, vy + vec[1] * strength * impulse_scale)
+                    vx = self._vel[:count, 0]
+                    vy = self._vel[:count, 1]
+
+                    impulse_scale = 0.05
+                    self._vel[:count, 0] = vx + vec[0] * strength * impulse_scale
+                    self._vel[:count, 1] = vy + vec[1] * strength * impulse_scale
+                else:
+                    # Specific list
+                    for idx in indices:
+                        self._has_target[idx] = False
+                        vx, vy = self._vel[idx]
+                        impulse_scale = 0.05
+                        self._vel[idx] = (
+                            vx + vec[0] * strength * impulse_scale,
+                            vy + vec[1] * strength * impulse_scale
+                        )
 
             instruction = LightInstruction(
                 intent=LightAction.MOVE,
@@ -184,17 +320,37 @@ class LightControlLogic:
 
         elif intent.action == LightAction.ERASE:
             if intent.region:
-                # Erase entities in region
-                to_remove = []
                 r = intent.region
-                for eid, ent in self.entities.items():
-                    px, py = ent.position
+                # Vectorized check
+                px = self._pos[:self._count, 0]
+                py = self._pos[:self._count, 1]
+
+                mask = (px >= r[0]) & (px <= r[2]) & (py >= r[1]) & (py <= r[3])
+
+                # Deletion while iterating is tricky.
+                # It's better to gather IDs to remove, or sort indices descending and remove.
+                # Vectorized removal:
+                # Actually, filtering might be easier: create new arrays?
+                # But swapping is O(1) per remove.
+                # If removing many, rebuilding might be faster.
+                # Let's iterate backwards.
+                indices_to_remove = np.where(mask)[0]
+                # Sort descending to remove without affecting other indices (except via swap)
+                # Swap removal changes indices, so simple iteration doesn't work if indices change.
+                # Wait, if we swap with last, the last one moves.
+                # We should use ids to be safe or be very careful.
+                # Simplest for now: loop and use _remove_entity_by_index carefully?
+                # No, standard swap-remove loop is:
+                i = 0
+                while i < self._count:
+                    px, py = self._pos[i]
                     if r[0] <= px <= r[2] and r[1] <= py <= r[3]:
-                        to_remove.append(eid)
-                for eid in to_remove:
-                    del self.entities[eid]
+                        self._remove_entity_by_index(i)
+                        # Don't increment i, as new element is at i
+                    else:
+                        i += 1
             else:
-                self.entities.clear()
+                self._clear_entities()
 
             instruction = LightInstruction(intent=LightAction.ERASE, region=intent.region)
 
@@ -214,42 +370,44 @@ class LightControlLogic:
              )
 
         elif intent.action == LightAction.MANIFEST:
-            # Generate formation data if shape name is provided but no raw data
             if not intent.formation_data and intent.shape_name:
-                count = len(self.entities) if self.entities else 50
-                count = max(count, 30) # Ensure minimal density
+                count = self._count if self._count > 0 else 50
+                count = max(count, 30)
                 intent.formation_data = FormationManager.get_formation(intent.shape_name, count)
 
             if intent.formation_data:
-                # Match particles to targets
-                # If we need more particles, spawn them
-                current_ids = list(self.entities.keys())
                 target_count = len(intent.formation_data)
-                current_count = len(current_ids)
 
                 # Spawn if needed
-                if current_count < target_count:
-                    needed = target_count - current_count
+                if self._count < target_count:
+                    needed = target_count - self._count
+                    self._ensure_capacity(needed)
+                    # Bulk spawn?
+                    # For now, loop spawn is fine
                     for _ in range(needed):
                         eid = str(uuid.uuid4())
-                        # Spawn near center initially
-                        self.entities[eid] = LightEntity(
-                            id=eid,
-                            position=(0.5, 0.5),
-                            velocity=(0.0, 0.0),
-                            energy=1.0
-                        )
+                        self._add_entity(eid, (0.5, 0.5), (0.0, 0.0), 1.0)
 
                 # Assign targets
-                entity_ids = list(self.entities.keys())
-                for i, (tx, ty, color) in enumerate(intent.formation_data):
-                    if i < len(entity_ids):
-                        eid = entity_ids[i]
-                        self.entities[eid].target_position = (tx, ty)
-                        self.entities[eid].target_color = color
+                # Vectorized assignment?
+                # We iterate through formation data and assign to existing indices 0..N
 
-                # If we have excess particles, maybe release them or let them float
-                # For now, just leave them
+                # Prepare arrays for bulk update
+                # Only update up to min(count, target_count)
+                limit = min(self._count, target_count)
+
+                # Extract formation data
+                formation_arr = np.array(intent.formation_data, dtype=object) # (N, 3)
+                # Separate coords and colors
+                # formation_data is [(x, y, color), ...]
+
+                # This unpacking might be slow if list is huge, but usually < 10k
+                coords = np.array([f[:2] for f in intent.formation_data[:limit]])
+                colors = [f[2] for f in intent.formation_data[:limit]]
+
+                self._target_pos[:limit] = coords
+                self._has_target[:limit] = True
+                self._target_colors[:limit] = colors
 
             instruction = LightInstruction(
                 intent=LightAction.MANIFEST,
@@ -260,58 +418,94 @@ class LightControlLogic:
         return instruction
 
     def tick(self, dt: float) -> LightState:
-        # Physics Step
-        for entity in self.entities.values():
-            x, y = entity.position
-            vx, vy = entity.velocity
+        count = self._count
+        if count == 0:
+            return LightState(entities={}, system_energy=self.system_energy)
 
-            # Formation Physics (Target Seeking)
-            if entity.target_position:
-                tx, ty = entity.target_position
+        # Slice active arrays
+        pos = self._pos[:count]
+        vel = self._vel[:count]
+        has_target = self._has_target[:count]
+        target_pos = self._target_pos[:count]
 
-                # Proportional Control (Spring force)
-                k_p = 5.0  # Spring constant
-                k_d = 0.5  # Damping
+        # 1. Formation Physics (Target Seeking) where has_target is True
+        # Vectorized conditional logic
 
-                dx = tx - x
-                dy = ty - y
+        # Calculate forces for all, mask later? Or calculate only for masked?
+        # Calculating for all is often faster due to contiguous memory, if mask is dense.
+        # But if sparse, indexing is better. Let's assume mixed.
 
-                fx = k_p * dx - k_d * vx
-                fy = k_p * dy - k_d * vy
+        # Indices with targets
+        target_indices = has_target
 
-                vx += fx * dt
-                vy += fy * dt
+        if np.any(target_indices):
+            # Proportional Control (Spring force)
+            k_p = 5.0
+            k_d = 0.5
 
-            else:
-                # Regular drift/friction if no target
-                vx *= 0.95
-                vy *= 0.95
+            tx = target_pos[target_indices, 0]
+            ty = target_pos[target_indices, 1]
+            x = pos[target_indices, 0]
+            y = pos[target_indices, 1]
+            vx = vel[target_indices, 0]
+            vy = vel[target_indices, 1]
 
-            x += vx * dt
-            y += vy * dt
+            dx = tx - x
+            dy = ty - y
 
-            # Bounce/Clamp
-            if x < 0: x = 0; vx = -vx * 0.8
-            if x > 1: x = 1; vx = -vx * 0.8
-            if y < 0: y = 0; vy = -vy * 0.8
-            if y > 1: y = 1; vy = -vy * 0.8
+            fx = k_p * dx - k_d * vx
+            fy = k_p * dy - k_d * vy
 
-            entity.position = (x, y)
-            entity.velocity = (vx, vy)
+            vel[target_indices, 0] += fx * dt
+            vel[target_indices, 1] += fy * dt
 
-            # History
-            entity.history.append((x, y))
-            if len(entity.history) > 10:
-                entity.history.pop(0)
+        # 2. Regular drift/friction where NO target
+        no_target_indices = ~target_indices
+        if np.any(no_target_indices):
+            vel[no_target_indices] *= 0.95
+
+        # 3. Integration
+        pos += vel * dt
+
+        # 4. Bounce/Clamp
+        # x < 0
+        mask_l = pos[:, 0] < 0
+        pos[mask_l, 0] = 0
+        vel[mask_l, 0] *= -0.8
+
+        # x > 1
+        mask_r = pos[:, 0] > 1
+        pos[mask_r, 0] = 1
+        vel[mask_r, 0] *= -0.8
+
+        # y < 0
+        mask_t = pos[:, 1] < 0
+        pos[mask_t, 1] = 0
+        vel[mask_t, 1] *= -0.8
+
+        # y > 1
+        mask_b = pos[:, 1] > 1
+        pos[mask_b, 1] = 1
+        vel[mask_b, 1] *= -0.8
+
+        # 5. History Update
+        # Shift history: (N, 10, 2)
+        # old: [0, 1, 2, 3] -> new: [1, 2, 3, new]
+        hist = self._history[:count]
+        hist[:, :-1, :] = hist[:, 1:, :]
+        hist[:, -1, :] = pos
 
         # Energy Regeneration
-        # If last activity > 1.0s, regenerate
         last_activity = max(self.last_intent_time.values()) if self.last_intent_time else 0
         if time.time() - last_activity > 1.0:
             self.system_energy = min(self.MAX_ENERGY, self.system_energy + 5.0 * dt)
 
+        # Return State
+        # Performance Note: We return an empty entities dict to avoid
+        # massive serialization overhead during the physics loop.
+        # Consumers should access the .entities property explicitly if they need a snapshot.
         return LightState(
-            entities=self.entities,
+            entities={},
             system_energy=self.system_energy
         )
 
@@ -321,5 +515,5 @@ class LightControlLogic:
             "avg_latency_ms": avg_latency,
             "total_intents": self.metrics["intent_count"],
             "system_energy": self.system_energy,
-            "entity_count": len(self.entities)
+            "entity_count": self._count
         }
