@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse
+from src.backend.core.visual_schemas import TemporalPhase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")
@@ -53,6 +54,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Text from Client STT
                     text = msg.get("text", "")
                     logger.info(f"Processing Text: {text}")
+
+                    # --- NEW: Immediate Temporal Pulse (Thinking) ---
+                    # Send visual feedback BEFORE processing starts to eliminate stutter
+                    thinking_params = engine.adapter.get_temporal_visuals(TemporalPhase.THINKING)
+                    vp_thinking = thinking_params.model_dump(mode='json')
+
+                    await websocket.send_text(json.dumps({
+                        "type": "VISUAL_PARAMS",
+                        "params": vp_thinking["visual_parameters"],
+                        "meta": {
+                            "category": vp_thinking["intent_category"],
+                            "valence": vp_thinking["emotional_valence"],
+                            "energy": vp_thinking["energy_level"]
+                        }
+                    }))
+                    # -----------------------------------------------
 
                     response: LogenesisResponse = await engine.process(text, session_id=session_id)
 

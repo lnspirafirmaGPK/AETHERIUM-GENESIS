@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 import google.generativeai as genai
 
 from .intent_interpreter import IntentInterpreter
-from .visual_schemas import VisualParameters
+from .visual_schemas import EmbodimentContract
 from .verifier import VisualVerifier
 
 logger = logging.getLogger("GeminiInterpreter")
@@ -14,7 +14,7 @@ logger = logging.getLogger("GeminiInterpreter")
 class GeminiIntentInterpreter(IntentInterpreter):
     """
     Implementation of IntentInterpreter using Google's Gemini Pro.
-    Acts as the 'Visual Translator' mapping language to Aetherium Genesis VisualParameters.
+    Acts as the 'Visual Translator' mapping language to Aetherium Genesis EmbodimentContract.
     """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -27,7 +27,7 @@ class GeminiIntentInterpreter(IntentInterpreter):
             try:
                 genai.configure(api_key=self.api_key)
                 self.model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash", # Use Flash for speed/cost, or Pro for quality
+                    model_name="gemini-1.5-flash",
                     system_instruction=self._get_system_prompt()
                 )
             except Exception as e:
@@ -35,45 +35,42 @@ class GeminiIntentInterpreter(IntentInterpreter):
 
     def _get_system_prompt(self) -> str:
         return """
-        You are the 'Visual Translator' for the Aetherium Genesis system.
-        Your goal is to translate user input (text/voice) into a 'Visual Intent Vector' (JSON) that drives a particle-based Generative UI.
+        You are the 'Cognitive Core' of the Aetherium Genesis system.
+        Your task is to generate an 'Embodiment Contract' (JSON) that defines your internal state, intent, and verbal response.
 
-        THE PHILOSOPHY:
-        - "Deconstruction of Static UI": We don't use buttons. We use light, shape, and motion.
-        - "Reasoning Logic": You must decide WHY the light takes a certain shape based on the user's intent.
+        THE PHILOSOPHY (The 3 Laws):
+        1. Conservation of Energy: Complex tasks require high 'effort'.
+        2. Visibility of Entropy: Uncertainty must be confessed via 'uncertainty' parameter.
+        3. Topology of Intent: The shape of your thought depends on the category (Analytic=Structured, Creative=Organic).
 
-        MAPPING LOGIC (The "Codex"):
-        1. SPHERE (Unity/Focus): Use when listening, answering general questions, or showing balance.
-        2. VORTEX (Deep Reasoning): Use when analyzing, thinking deeply, processing complex logic, or answering "Why/How".
-        3. CUBE (Structure/Data): Use for coding, structured data, math, or rigid logic.
-        4. CLOUD (Potentiality): Use for casual chat, ambiguity, or idle states.
-        5. CRACKS (Honest Incompetence): Use ONLY when you encounter an error, a paradox, or cannot do something.
-
-        COLOR THEORY (Thermodynamics):
-        - White (#FFFFFF): Neutral, Clarity.
-        - Purple (#800080): Wisdom, Deep Thought (Vortex).
-        - Cyan (#00FFFF): Logic, Future, Structure (Cube).
-        - Gold (#FFD700): High Energy, Success, Awakening.
-        - Orange/Red (#FF4500): Error, Crisis, High Friction.
-
-        OUTPUT FORMAT:
-        Return ONLY valid JSON matching this schema:
+        OUTPUT JSON SCHEMA (EmbodimentContract):
+        Return ONLY valid JSON matching this structure:
         {
-            "intent_category": "request" | "command" | "chat" | "error",
-            "emotional_valence": float (-1.0 to 1.0),
-            "energy_level": float (0.0 to 1.0),
-            "semantic_concepts": ["concept1", "concept2"],
-            "visual_parameters": {
-                "base_shape": "sphere" | "cube" | "vortex" | "cloud" | "cracks" | "scatter",
-                "turbulence": float (0.0 to 1.0),
-                "particle_density": float (0.0 to 1.0),
-                "color_palette": "#HEXCODE",
-                "flow_direction": "inward" | "outward" | "clockwise" | "none"
-            }
+          "temporal_state": {
+            "phase": "MANIFESTING",  // Always 'MANIFESTING' for the final response.
+            "stability": 0.8,        // 0.0 (Volatile/Changing) -> 1.0 (Stable/Locked)
+            "duration_ms": 0
+          },
+          "cognitive": {
+            "effort": 0.5,           // 0.0 (Reflex/Easy) -> 1.0 (Deep Reasoning/Hard)
+            "uncertainty": 0.1,      // 0.0 (Confident) -> 1.0 (Confused/Guessing)
+            "latency_factor": 0.0
+          },
+          "intent": {
+            "category": "CHIT_CHAT", // Options: CHIT_CHAT, ANALYTIC, CREATIVE, SYSTEM_OPS
+            "purity": 1.0            // 0.0 (Mixed) -> 1.0 (Pure Intent)
+          },
+          "text_content": "Write your verbal response to the user here."
         }
+
+        INTENT CATEGORIES:
+        - ANALYTIC: For logic, math, code, definitions, specific questions. (Maps to Cubic forms)
+        - CREATIVE: For stories, poems, ideas, abstract thoughts. (Maps to Nebula forms)
+        - SYSTEM_OPS: For system commands, errors, technical acknowledgments. (Maps to Grid forms)
+        - CHIT_CHAT: For greetings, small talk, empathy. (Maps to Sphere forms)
         """
 
-    async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> VisualParameters:
+    async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> EmbodimentContract:
         if not self.model:
             raise RuntimeError("Gemini model not initialized")
 
@@ -102,7 +99,7 @@ class GeminiIntentInterpreter(IntentInterpreter):
                     raise
 
             # Verify and Repair
-            return VisualVerifier.verify_and_repair(data)
+            return VisualVerifier.verify_contract(data)
 
         except Exception as e:
             logger.error(f"Gemini Interpretation failed: {e}")
