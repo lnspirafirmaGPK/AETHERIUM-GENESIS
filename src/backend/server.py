@@ -12,17 +12,103 @@ from fastapi.staticfiles import StaticFiles
 
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
-from src.backend.core.visual_schemas import TemporalPhase
+from src.backend.core.visual_schemas import TemporalPhase, IntentCategory, BaseShape
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")
 
 app = FastAPI()
 
-# Initialize Engine
+# --- DEEPGRAM INTERFACE STUB ---
+class DeepgramTranscriber:
+    """
+    Interface for Deepgram Live Transcription.
+    Disabled by default, using Mock Mode.
+    """
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key
+        self.enabled = False # Set to True if API key is provided and needed
+
+    async def transcribe_stream(self, audio_chunk: bytes):
+        if not self.enabled:
+            return None
+        # Actual Deepgram implementation would go here
+        return "Deepgram Transcription Placeholder"
+
+# Initialize Engine and Transcriber
 engine = LogenesisEngine()
+transcriber = DeepgramTranscriber(api_key=os.getenv("DEEPGRAM_API_KEY"))
 
 clients = set()
+
+@app.websocket("/ws/v2/stream")
+async def websocket_v2_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    logger.info("V2 Client connected")
+    session_id = str(id(websocket))
+
+    try:
+        while True:
+            message = await websocket.receive()
+
+            if "bytes" in message:
+                # Handle binary audio (Mock: ignore or simple energy check)
+                audio_data = message["bytes"]
+                # In a real scenario, we'd feed this to transcriber
+                continue
+
+            elif "text" in message:
+                try:
+                    data = json.loads(message["text"])
+                except json.JSONDecodeError:
+                    continue
+
+                # Mock Transcriber Logic: Receive text to simulate voice
+                if data.get("type") in ["MOCK_TRANSCRIPTION", "TEXT_INPUT"]:
+                    text = data.get("text", "")
+                    logger.info(f"V2 Input: {text}")
+
+                    packet = IntentPacket(
+                        modality="text",
+                        embedding=None,
+                        energy_level=0.5,
+                        confidence=1.0,
+                        raw_payload=text
+                    )
+                    response: LogenesisResponse = await engine.process(packet, session_id=session_id)
+
+                    if response.visual_analysis:
+                        va = response.visual_analysis
+                        payload = {
+                            "type": "VISUAL_UPDATE",
+                            "payload": {
+                                "intent": va.intent_category,
+                                "energy": va.energy_level,
+                                "shape": va.visual_parameters.base_shape,
+                                "color_code": va.visual_parameters.color_palette
+                            },
+                            "transcript_preview": text,
+                            "text_content": response.text_content
+                        }
+                        await websocket.send_text(json.dumps(payload))
+
+                elif data.get("type") == "GET_IDLE_STATE":
+                    # Send initial idle parameters
+                    payload = {
+                        "type": "VISUAL_UPDATE",
+                        "payload": {
+                            "intent": "chat",
+                            "energy": 0.1,
+                            "shape": "sphere",
+                            "color_code": "#06b6d4"
+                        }
+                    }
+                    await websocket.send_text(json.dumps(payload))
+
+    except WebSocketDisconnect:
+        logger.info("V2 Client disconnected")
+    except Exception as e:
+        logger.error(f"V2 Server Error: {e}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
