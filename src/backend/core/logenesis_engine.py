@@ -74,9 +74,11 @@ class StateStore:
 
 class LogenesisEngine:
     """
-    The Adaptive Resonance Engine.
-    Manages state (Awake/Nirodha) and generates holistic responses.
-    Implements 'State Drift' logic for fluid personality adaptation.
+    The Cognitive Fabric Implementation.
+
+    This engine acts as the core reasoning substrate for the Cognitive Infrastructure.
+    It manages the transition between 'Nirodha' (Stillness) and 'Awakened' (Active Processing)
+    states, not as a biological being, but as a state-aware execution environment.
     """
     def __init__(self):
         self.state = LogenesisState.VOID
@@ -202,7 +204,7 @@ class LogenesisEngine:
         self.state = LogenesisState.NIRODHA
         return LogenesisResponse(
             state=LogenesisState.NIRODHA,
-            text_content="Protocol: Deep Sleep. Interactions suspended.",
+            text_content="Protocol: NIRODHA. Cognitive cycles suspended.",
             visual_qualia=VisualQualia(color="#050505", intensity=0.0, turbulence=0.0, shape="void"),
             audio_qualia=AudioQualia(rhythm_density=0.0, tone_texture="smooth", amplitude_bias=0.0),
             physics_params=PhysicsParams(spawn_rate=0, velocity_bias=[0.0, 0.0], decay_rate=0.1)

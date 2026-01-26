@@ -3,6 +3,9 @@ from typing import Optional, Tuple, List, Dict
 from enum import Enum, IntEnum
 
 class LightAction(str, Enum):
+    """
+    Defines the atomic operations allowed within the LightProtocol.
+    """
     SPAWN = "SPAWN"
     MOVE = "MOVE"
     ERASE = "ERASE"
@@ -21,6 +24,10 @@ class PriorityLevel(IntEnum):
     SYSTEM = 3
 
 class LightIntent(BaseModel):
+    """
+    A structured signal within the LightProtocol.
+    Represents a discrete cognitive intent to be rendered as an observable event.
+    """
     action: LightAction
     target: Optional[str] = None
     region: Optional[Tuple[float, float, float, float]] = None # normalized bbox
