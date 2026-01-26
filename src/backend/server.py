@@ -11,7 +11,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from src.backend.core.logenesis_engine import LogenesisEngine
-from src.backend.core.logenesis_schemas import LogenesisResponse
+from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
 from src.backend.core.visual_schemas import TemporalPhase
 
 logging.basicConfig(level=logging.INFO)
@@ -71,7 +71,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     }))
                     # -----------------------------------------------
 
-                    response: LogenesisResponse = await engine.process(text, session_id=session_id)
+                    packet = IntentPacket(
+                        modality="text",
+                        embedding=None,
+                        energy_level=0.5,
+                        confidence=1.0,
+                        raw_payload=text
+                    )
+                    response: LogenesisResponse = await engine.process(packet, session_id=session_id)
 
                     # Convert LogenesisResponse to Client Protocol
                     # 1. Visual Params (Check Manifestation Gate)
@@ -110,7 +117,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 inp = msg.get("input", {})
                 text = inp.get("text", "")
 
-                response: LogenesisResponse = await engine.process(text, session_id=session_id)
+                packet = IntentPacket(
+                    modality="text",
+                    embedding=None,
+                    energy_level=0.5,
+                    confidence=1.0,
+                    raw_payload=text
+                )
+                response: LogenesisResponse = await engine.process(packet, session_id=session_id)
 
                 # Send back raw LogenesisResponse (PWA knows how to handle it)
                 await websocket.send_text(response.model_dump_json())
