@@ -133,9 +133,14 @@ class LogenesisEngine:
             recall_proposal = self._check_recall(text, memory_index)
 
         # 5. Manifestation Logic (Derived from Visual Parameters)
-        # We now trust the LLM's visual parameters more than the old gate logic,
-        # but we can fallback to formation logic if shape is explicit.
-        light_intent = self._create_intent_from_params(visual_params)
+        # Check Manifestation Gate
+        is_manifestation_granted = self._check_manifestation_gate(visual_params)
+
+        light_intent = None
+        if is_manifestation_granted:
+            # We now trust the LLM's visual parameters more than the old gate logic,
+            # but we can fallback to formation logic if shape is explicit.
+            light_intent = self._create_intent_from_params(visual_params)
 
         # 6. Synthesize Text Response
         # In Phase 2, LLM should also generate text. For now, we use the drift logic synthesizer
@@ -152,8 +157,36 @@ class LogenesisEngine:
             intent_debug=drifted_vector,
             recall_proposal=recall_proposal,
             light_intent=light_intent,
-            visual_analysis=visual_params # The new payload
+            visual_analysis=visual_params, # The new payload
+            manifestation_granted=is_manifestation_granted
         )
+
+    def _check_manifestation_gate(self, visual_params: VisualParameters) -> bool:
+        """
+        Decision Boundary: "Manifestation Gate".
+        Determines if the interpreted intent has enough 'Will to Manifest'
+        to justify a visual state change.
+        """
+        # Always manifest explicit commands, requests, or errors
+        if visual_params.intent_category in [IntentCategory.COMMAND, IntentCategory.REQUEST, IntentCategory.ERROR]:
+            return True
+
+        # For conversational intent (CHAT), check thresholds
+        if visual_params.intent_category == IntentCategory.CHAT:
+            # Manifest if high energy
+            if visual_params.energy_level > 0.6:
+                return True
+            # Manifest if strong emotional valence
+            if abs(visual_params.emotional_valence) > 0.6:
+                return True
+            # Manifest if high turbulence (chaos)
+            if visual_params.visual_parameters.turbulence > 0.6:
+                return True
+
+            # Otherwise, suppress visual manifestation (Conversational Loop)
+            return False
+
+        return True # Default safe open
 
     def _map_visual_to_intent_vector(self, vp: VisualParameters) -> IntentVector:
         """
