@@ -39,19 +39,22 @@ def test_physics_tick():
     lcl = LightControlLogic()
     # Add an entity
     entity = LightEntity(id="e1", position=(0.5, 0.5), velocity=(0.1, 0.0), energy=1.0)
-    lcl.entities["e1"] = entity
+    lcl.entities = {"e1": entity}
 
     lcl.tick(0.1)
+
+    # Fetch updated state
+    updated_entity = lcl.entities["e1"]
 
     # New x = 0.5 + 0.1 * 0.1 = 0.51
     # Logic applies friction (0.95) BEFORE position update
     # vx = 0.1 * 0.95 = 0.095
     # x = 0.5 + 0.095 * 0.1 = 0.5095
-    assert entity.position[0] > 0.5
-    assert abs(entity.position[0] - 0.5095) < 0.0001
+    assert updated_entity.position[0] > 0.5
+    assert abs(updated_entity.position[0] - 0.5095) < 0.0001
     # Velocity should decay: 0.1 * 0.95 = 0.095
-    assert entity.velocity[0] < 0.1
-    assert abs(entity.velocity[0] - 0.095) < 0.0001
+    assert updated_entity.velocity[0] < 0.1
+    assert abs(updated_entity.velocity[0] - 0.095) < 0.0001
 
 def test_process_spawn_move():
     lcl = LightControlLogic()
