@@ -12,12 +12,18 @@ from .verifier import VisualVerifier
 logger = logging.getLogger("GeminiInterpreter")
 
 class GeminiIntentInterpreter(IntentInterpreter):
-    """
-    Implementation of IntentInterpreter using Google's Gemini Pro.
-    Acts as the 'Visual Translator' mapping language to Aetherium Genesis EmbodimentContract.
+    """Implementation of IntentInterpreter using Google's Gemini Pro.
+
+    Acts as the 'Visual Translator' mapping natural language to the
+    Aetherium Genesis EmbodimentContract schema via LLM prompts.
     """
 
     def __init__(self, api_key: Optional[str] = None):
+        """Initializes the Gemini model.
+
+        Args:
+            api_key: Google Gemini API Key. Defaults to GOOGLE_API_KEY env var.
+        """
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         self.model = None
 
@@ -34,6 +40,11 @@ class GeminiIntentInterpreter(IntentInterpreter):
                 logger.error(f"Failed to initialize Gemini: {e}")
 
     def _get_system_prompt(self) -> str:
+        """Returns the system prompt defining the cognitive laws and JSON schema.
+
+        Returns:
+            The system instruction string.
+        """
         return """
         You are the 'Cognitive Core' of the Aetherium Genesis system.
         Your task is to generate an 'Embodiment Contract' (JSON) that defines your internal state, intent, and verbal response.
@@ -71,6 +82,22 @@ class GeminiIntentInterpreter(IntentInterpreter):
         """
 
     async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> EmbodimentContract:
+        """Generates an EmbodimentContract from user text using Gemini.
+
+        Constructs a prompt with context, invokes the LLM, parses the JSON response,
+        and verifies it against the schema.
+
+        Args:
+            text: The user input text.
+            context: Optional conversational context.
+
+        Returns:
+            A verified EmbodimentContract.
+
+        Raises:
+            RuntimeError: If the model is not initialized.
+            Exception: If generation or parsing fails.
+        """
         if not self.model:
             raise RuntimeError("Gemini model not initialized")
 

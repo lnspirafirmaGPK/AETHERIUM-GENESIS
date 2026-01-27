@@ -10,15 +10,23 @@ from .visual_schemas import (
 logger = logging.getLogger("Verifier")
 
 class VisualVerifier:
-    """
-    Ensures that the generated VisualParameters or EmbodimentContract are valid and safe.
-    Performs clamping and default fallbacks.
+    """Ensures data integrity for visual and embodiment schemas.
+
+    Performs validation, clamping, and repair of data structures to prevent
+    runtime errors in the rendering engine.
     """
 
     @staticmethod
     def verify_contract(data: Union[Dict[str, Any], EmbodimentContract]) -> EmbodimentContract:
-        """
-        Validates the input data against the EmbodimentContract schema.
+        """Validates the input data against the EmbodimentContract schema.
+
+        If validation fails, attempts to repair the data structure using default values.
+
+        Args:
+            data: A dictionary or EmbodimentContract instance to verify.
+
+        Returns:
+            A valid EmbodimentContract instance.
         """
         if isinstance(data, EmbodimentContract):
             return data
@@ -31,6 +39,14 @@ class VisualVerifier:
 
     @staticmethod
     def _repair_contract(data: Dict[str, Any]) -> EmbodimentContract:
+        """Repairs malformed contract data with safe defaults.
+
+        Args:
+            data: The potentially malformed data dictionary.
+
+        Returns:
+            A sanitized EmbodimentContract.
+        """
         # Defaults
         default_phase = TemporalPhase.MANIFESTING
         default_category = ContractIntentCategory.CHIT_CHAT
@@ -93,9 +109,16 @@ class VisualVerifier:
 
     @staticmethod
     def verify_and_repair(data: Union[Dict[str, Any], VisualParameters]) -> VisualParameters:
-        """
-        Validates the input data against the VisualParameters schema.
-        If it fails, attempts to repair common issues or returns a safe default.
+        """Validates the input data against the VisualParameters schema.
+
+        If strict validation fails, attempts to repair common issues (e.g., incorrect enums,
+        out-of-bounds numbers) or returns a safe default.
+
+        Args:
+            data: A dictionary or VisualParameters instance to verify.
+
+        Returns:
+            A valid VisualParameters instance.
         """
         if isinstance(data, VisualParameters):
             return data
@@ -109,6 +132,16 @@ class VisualVerifier:
 
     @staticmethod
     def _repair(data: Dict[str, Any]) -> VisualParameters:
+        """Repairs malformed visual parameter data.
+
+        Handles enum mapping, value clamping, and missing fields.
+
+        Args:
+            data: The potentially malformed data dictionary.
+
+        Returns:
+            A sanitized VisualParameters instance.
+        """
         # Fallback values
         safe_defaults = {
             "intent_category": IntentCategory.CHAT,

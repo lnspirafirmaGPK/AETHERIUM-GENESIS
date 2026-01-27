@@ -6,15 +6,24 @@ from .visual_schemas import (
 )
 
 class EmbodimentAdapter:
-    """
-    The Nervous System: Translates Cognitive Contract into Visual Parameters.
-    Implements the 'Application Binary Interface (ABI) of Cognition'.
+    """The Nervous System: Translates Cognitive Contracts into Visual Parameters.
+
+    Implements the 'Application Binary Interface (ABI) of Cognition', converting
+    high-level semantic intent into low-level physics and rendering parameters.
     """
 
     def translate(self, contract: EmbodimentContract) -> VisualParameters:
-        """
-        Converts the high-level EmbodimentContract into the low-level VisualParameters
-        compatible with the GunUI renderer.
+        """Converts an EmbodimentContract into VisualParameters.
+
+        Applies the laws of cognitive physics (Conservation of Energy,
+        Visibility of Entropy, Topology of Intent) to map abstract thought
+        into concrete visual properties.
+
+        Args:
+            contract: The high-level intent contract from the interpreter.
+
+        Returns:
+            A VisualParameters object compatible with the frontend renderer.
         """
 
         # --- LAW 1: Conservation of Energy (Inertia) ---
@@ -96,9 +105,16 @@ class EmbodimentAdapter:
         )
 
     def get_temporal_visuals(self, phase: TemporalPhase) -> VisualParameters:
-        """
-        Generates immediate visual states for temporal phases (e.g., THINKING).
-        This bypasses the LLM to prevent stutter.
+        """Generates immediate visual states for specific temporal phases.
+
+        Used to provide instant feedback (e.g., "Thinking") before the LLM processing completes,
+        reducing perceived latency.
+
+        Args:
+            phase: The requested TemporalPhase (e.g., THINKING, LISTENING).
+
+        Returns:
+            A VisualParameters object pre-configured for the requested phase.
         """
         if phase == TemporalPhase.THINKING:
             # High Velocity + Center Focus (Vortex)

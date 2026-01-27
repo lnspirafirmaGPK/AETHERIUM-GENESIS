@@ -13,11 +13,14 @@ from .image_processor import ImageProcessor
 logger = logging.getLogger("GeminiAdapter")
 
 class GeminiAdapter(AIModelAdapter):
+    """Integrates Google's Gemini models for reasoning and manifestation.
+
+    Handles text generation, intent classification, and visual manifestation logic.
+    Supports a "systemic" persona that avoids anthropomorphism.
     """
-    The Brain: Gemini 3 Pro (Simulated via 1.5 Pro)
-    Integrates Reasoning (Text) and Manifestation (Image -> Particles).
-    """
+
     def __init__(self):
+        """Initializes the Gemini Adapter with API keys and models."""
         self.api_key = os.environ.get("GOOGLE_API_KEY")
         if not self.api_key:
             logger.warning("GOOGLE_API_KEY not found. GeminiAdapter will fail or mock.")
@@ -59,6 +62,11 @@ class GeminiAdapter(AIModelAdapter):
                 logger.error(f"Failed to init Gemini: {e}")
 
     def _get_system_persona(self) -> str:
+        """Constructs the system instructions based on the Constitution.
+
+        Returns:
+            The system prompt string.
+        """
         base_persona = """
         You are the Aetherium Genesis System.
 
@@ -81,8 +89,14 @@ class GeminiAdapter(AIModelAdapter):
         return base_persona
 
     async def generate_intent(self, prompt: str, scene_state: Dict[str, Any]) -> LightIntent:
-        """
-        Decides whether to Answer (Text) or Manifest (Image) based on the prompt.
+        """Determines whether to answer or manifest based on the user's prompt.
+
+        Args:
+            prompt: The user's input text.
+            scene_state: The current state of the scene (unused in current logic).
+
+        Returns:
+            A LightIntent object indicating the chosen action (Answer vs Manifest).
         """
         if not self.classifier_model:
             logger.info("No Gemini Model, falling back to Mock behavior via Text Image.")
@@ -130,8 +144,13 @@ class GeminiAdapter(AIModelAdapter):
             )
 
     async def _handle_manifestation(self, description: str) -> LightIntent:
-        """
-        Generates an image (Cloud API or Fallback) and processes it into particles.
+        """Generates a visual manifestation from a description.
+
+        Args:
+            description: The text description of the visual.
+
+        Returns:
+            A LightIntent containing formation data.
         """
         image = None
         try:
@@ -159,8 +178,13 @@ class GeminiAdapter(AIModelAdapter):
         )
 
     async def _handle_answer(self, query: str) -> LightIntent:
-        """
-        Performs Google Search (Grounding) and returns text.
+        """Generates a text answer, potentially using Google Search.
+
+        Args:
+            query: The question or topic.
+
+        Returns:
+            A LightIntent containing the text response.
         """
         try:
             # Use the Search-enabled model
@@ -180,6 +204,14 @@ class GeminiAdapter(AIModelAdapter):
         )
 
     def _manifest_text_as_image(self, text: str) -> LightIntent:
+        """Fallback method to manifest text as a visual image.
+
+        Args:
+            text: The text to display.
+
+        Returns:
+            A LightIntent.
+        """
         image = ImageProcessor.create_text_image(text)
         particles = ImageProcessor.process_image_to_particles(image)
         return LightIntent(

@@ -3,23 +3,43 @@ import random
 from typing import List, Tuple, Optional
 
 class FormationManager:
-    """
-    Generates coordinate sets for particle formations.
-    Coordinates are normalized (0.0 to 1.0).
+    """Generates coordinate sets for particle formations.
+
+    Coordinates are normalized (0.0 to 1.0) relative to the provided canvas dimensions,
+    facilitating resolution-independent rendering on the frontend.
     """
 
     def calculate_formation(self, shape_type: str, particle_count: int, canvas_width: int, canvas_height: int) -> List[Tuple[float, float, str]]:
-        """
-        Adapter method for pixel-based calls.
-        Returns NORMALIZED coordinates (0.0-1.0) regardless of input resolution,
-        to maintain compatibility with the frontend renderer which scales them.
+        """Calculates normalized particle coordinates for a given shape.
+
+        This acts as an adapter method that currently ignores canvas dimensions
+        to return normalized coordinates (0.0-1.0), which is the expected format
+        for the current frontend renderer.
+
+        Args:
+            shape_type: The name of the shape (e.g., "circle", "square").
+            particle_count: The number of particles to generate.
+            canvas_width: The width of the canvas (unused, for interface compatibility).
+            canvas_height: The height of the canvas (unused, for interface compatibility).
+
+        Returns:
+            A list of tuples, where each tuple contains (x, y, color_hint).
+            x and y are floats between 0.0 and 1.0.
         """
         return self.get_formation(shape_type, particle_count)
 
     @staticmethod
     def get_formation(shape: str, count: int, center: Tuple[float, float] = (0.5, 0.5), scale: float = 0.3) -> List[Tuple[float, float, str]]:
-        """
-        Returns a list of (x, y, color_hint) tuples.
+        """Generates formation coordinates based on shape name.
+
+        Args:
+            shape: The name of the shape (case-insensitive).
+            count: The number of particles.
+            center: A tuple (x, y) for the center point. Defaults to (0.5, 0.5).
+            scale: The scale of the formation relative to the canvas size. Defaults to 0.3.
+
+        Returns:
+            A list of (x, y, color_hint) tuples.
         """
         shape = shape.lower().strip()
         points = []
@@ -44,6 +64,7 @@ class FormationManager:
 
     @staticmethod
     def _circle(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a circle."""
         cx, cy = center
         points = []
         for i in range(count):
@@ -56,6 +77,7 @@ class FormationManager:
 
     @staticmethod
     def _square(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a square outline."""
         cx, cy = center
         points = []
         side = scale * 2
@@ -84,6 +106,7 @@ class FormationManager:
 
     @staticmethod
     def _line(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a horizontal line."""
         cx, cy = center
         points = []
         start_x = cx - scale
@@ -96,6 +119,7 @@ class FormationManager:
 
     @staticmethod
     def _vertical_line(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a vertical line."""
         cx, cy = center
         points = []
         start_y = cy - scale
@@ -108,6 +132,7 @@ class FormationManager:
 
     @staticmethod
     def _spiral(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a spiral."""
         cx, cy = center
         points = []
         rotations = 3
@@ -122,6 +147,7 @@ class FormationManager:
 
     @staticmethod
     def _cross(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points arranged in a cross (+)."""
         cx, cy = center
         points = []
         half = count // 2
@@ -140,6 +166,7 @@ class FormationManager:
 
     @staticmethod
     def _scatter(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
+        """Generates points scattered randomly within a circle."""
         cx, cy = center
         points = []
         for _ in range(count):

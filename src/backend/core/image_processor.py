@@ -3,23 +3,25 @@ import numpy as np
 from typing import List, Tuple
 
 class ImageProcessor:
-    """
-    Vision Core (BioVisionNet Surrogate)
-    Translates visual data (Images) into Structural Light Data (Particle Targets).
+    """Vision Core (BioVisionNet Surrogate).
+
+    Translates visual data (Images) into Structural Light Data (Particle Targets)
+    for the rendering engine.
     """
 
     @staticmethod
     def process_image_to_particles(image: Image.Image, max_particles: int = 300) -> List[Tuple[float, float, str]]:
-        """
-        Converts an image into a set of particle targets.
+        """Converts an image into a set of particle targets.
+
+        Resizes the image to a low-resolution grid and maps non-empty pixels to
+        normalized coordinates.
 
         Args:
-            image: PIL Image object.
+            image: A PIL Image object.
             max_particles: Maximum number of points to extract.
 
         Returns:
-            List of (x, y, color_hex) tuples.
-            x, y are normalized [0, 1].
+            A list of (x, y, color_hex) tuples, where x and y are normalized [0, 1].
         """
         # Resize to a grid that roughly approximates the particle count
         # Square root of max_particles to get grid side
@@ -54,8 +56,15 @@ class ImageProcessor:
 
     @staticmethod
     def create_text_image(text: str) -> Image.Image:
-        """
-        Fallback: Create an image from text if generation fails.
+        """Generates a fallback image containing the specified text.
+
+        Used when image generation services are unavailable.
+
+        Args:
+            text: The text to render onto the image.
+
+        Returns:
+            A PIL Image object with the text rendered on a black background.
         """
         from PIL import ImageDraw, ImageFont
         img = Image.new('RGB', (200, 200), color=(0, 0, 0))

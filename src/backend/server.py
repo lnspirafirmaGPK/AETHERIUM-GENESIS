@@ -23,15 +23,28 @@ app.include_router(auth_router)
 
 # --- DEEPGRAM INTERFACE STUB ---
 class DeepgramTranscriber:
-    """
-    Interface for Deepgram Live Transcription.
-    Disabled by default, using Mock Mode.
+    """Interface for Deepgram Live Transcription.
+
+    Disabled by default, using Mock Mode in development.
     """
     def __init__(self, api_key: str = None):
+        """Initializes the transcriber.
+
+        Args:
+            api_key: The Deepgram API key. If None, the transcriber is disabled.
+        """
         self.api_key = api_key
         self.enabled = False # Set to True if API key is provided and needed
 
     async def transcribe_stream(self, audio_chunk: bytes):
+        """Transcribes a chunk of audio data.
+
+        Args:
+            audio_chunk: Raw audio bytes.
+
+        Returns:
+            The transcribed text, or None if disabled.
+        """
         if not self.enabled:
             return None
         # Actual Deepgram implementation would go here
@@ -45,6 +58,14 @@ clients = set()
 
 @app.websocket("/ws/v2/stream")
 async def websocket_v2_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for V2 Streaming Protocol.
+
+    Handles continuous audio streaming (mocked) and text input events.
+    Manages session-based intent processing and visual updates.
+
+    Args:
+        websocket: The WebSocket connection instance.
+    """
     await websocket.accept()
     logger.info("V2 Client connected")
     session_id = str(id(websocket))
@@ -114,6 +135,14 @@ async def websocket_v2_endpoint(websocket: WebSocket):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    """Legacy WebSocket endpoint for the Living Interface PWA and Actuator UI.
+
+    Handles `INTENT_*` lifecycle events, resets, and legacy `logenesis` mode inputs.
+    Provides immediate visual feedback (temporal pulse) before processing completes.
+
+    Args:
+        websocket: The WebSocket connection instance.
+    """
     await websocket.accept()
     clients.add(websocket)
     logger.info("Client connected")

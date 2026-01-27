@@ -24,15 +24,23 @@ from .embodiment_adapter import EmbodimentAdapter
 logger = logging.getLogger("LogenesisEngine")
 
 class StateStore:
-    """
-    Simple JSON-based persistence for ExpressionStates.
+    """Persistence layer for Logenesis expression states.
+
+    Manages the saving and loading of session-specific state data (inertia, velocity, current vector)
+    to a local JSON file.
     """
     def __init__(self, filepath: str = "logenesis_state.json"):
+        """Initializes the StateStore.
+
+        Args:
+            filepath: Path to the JSON file for state persistence.
+        """
         self.filepath = filepath
         self._cache: Dict[str, ExpressionState] = {}
         self._load()
 
     def _load(self):
+        """Loads states from disk into memory."""
         if not os.path.exists(self.filepath):
             return
         try:
@@ -47,6 +55,7 @@ class StateStore:
             logger.error(f"Error loading state store: {e}")
 
     def save(self):
+        """Saves current memory states to disk."""
         try:
             data = {sid: state.model_dump(mode='json') for sid, state in self._cache.items()}
             with open(self.filepath, 'w') as f:
@@ -55,6 +64,14 @@ class StateStore:
             logger.error(f"Error saving state store: {e}")
 
     def get_state(self, session_id: str) -> ExpressionState:
+        """Retrieves or initializes the state for a given session.
+
+        Args:
+            session_id: The unique session identifier.
+
+        Returns:
+            The ExpressionState object.
+        """
         if session_id not in self._cache:
             # Initialize with default neutral state
             default_vector = IntentVector(
@@ -71,18 +88,24 @@ class StateStore:
         return self._cache[session_id]
 
     def update_state(self, session_id: str, state: ExpressionState):
+        """Updates and persists the state for a session.
+
+        Args:
+            session_id: The unique session identifier.
+            state: The new ExpressionState.
+        """
         self._cache[session_id] = state
         self.save() # Naive save on every update for now
 
 class LogenesisEngine:
-    """
-    The Cognitive Fabric Implementation.
+    """The Cognitive Fabric Implementation.
 
     This engine acts as the core reasoning substrate for the Cognitive Infrastructure.
     It manages the transition between 'Nirodha' (Stillness) and 'Awakened' (Active Processing)
     states, not as a biological being, but as a state-aware execution environment.
     """
     def __init__(self):
+        """Initializes the engine, managers, adapters, and interpreters."""
         self.state = LogenesisState.VOID
         self.state_store = StateStore()
         self.formation_manager = FormationManager()
@@ -98,6 +121,25 @@ class LogenesisEngine:
             self.interpreter = SimulatedIntentInterpreter()
 
     async def process(self, packet: Union[IntentPacket, str], session_id: str = "global", memory_index: Optional[list] = None, recalled_context: Optional[str] = None) -> LogenesisResponse:
+        """Processes an incoming intent packet and generates a cognitive response.
+
+        This method orchestrates the full cognitive cycle:
+        1. Normalization of input.
+        2. Intent Interpretation (via LLM or Simulation).
+        3. Embodiment Adaptation (Translation to Visuals).
+        4. State Drift Calculation (Physics of Thought).
+        5. Manifestation Gating (Deciding to show visuals).
+        6. Response Synthesis.
+
+        Args:
+            packet: The input data, either a raw string or an IntentPacket.
+            session_id: The session identifier for state persistence.
+            memory_index: Optional list of memory items for recall checks.
+            recalled_context: Optional string of previously recalled context.
+
+        Returns:
+            A LogenesisResponse containing text, visual params, and system state.
+        """
         # 0. Packet Normalization
         if isinstance(packet, str):
             packet = IntentPacket(
@@ -213,6 +255,7 @@ class LogenesisEngine:
         )
 
     def _map_visual_packet_to_intent(self, packet: IntentPacket) -> IntentVector:
+         """Maps a raw visual packet to an intent vector."""
          return IntentVector(
              epistemic_need=0.2,
              subjective_weight=0.5, # Baseline
@@ -221,6 +264,7 @@ class LogenesisEngine:
          )
 
     def _map_aether_to_visual(self, output: AetherOutput) -> VisualParameters:
+         """Maps AetherState output to VisualParameters."""
          # Map AetherState to Shape
          shape = BaseShape.CLOUD
          if output.state == AetherState.STABILIZED: shape = BaseShape.CUBE
@@ -242,10 +286,16 @@ class LogenesisEngine:
          )
 
     def _check_manifestation_gate(self, visual_params: VisualParameters) -> bool:
-        """
-        Decision Boundary: "Manifestation Gate".
-        Determines if the interpreted intent has enough 'Will to Manifest'
-        to justify a visual state change.
+        """Determines if the interpreted intent has enough 'Will to Manifest' to justify a visual state change.
+
+        This acts as a high-pass filter for visual updates, preventing system jitter from
+        low-confidence or low-energy intent inputs.
+
+        Args:
+            visual_params: The proposed visual parameters.
+
+        Returns:
+            True if manifestation is granted, False otherwise.
         """
         # Always manifest explicit commands, requests, or errors
         if visual_params.intent_category in [IntentCategory.COMMAND, IntentCategory.REQUEST, IntentCategory.ERROR]:
@@ -269,9 +319,15 @@ class LogenesisEngine:
         return True # Default safe open
 
     def _map_visual_to_intent_vector(self, vp: VisualParameters) -> IntentVector:
-        """
-        Maps the new VisualParameters schema to the legacy IntentVector
-        to preserve the State Drift physics.
+        """Maps the new VisualParameters schema to the legacy IntentVector.
+
+        This ensures backward compatibility with the State Drift physics engine.
+
+        Args:
+            vp: The VisualParameters instance.
+
+        Returns:
+            An IntentVector derived from the visual parameters.
         """
         epistemic = 0.1
         if vp.intent_category == IntentCategory.REQUEST:
@@ -299,8 +355,15 @@ class LogenesisEngine:
         )
 
     def _create_intent_from_params(self, vp: VisualParameters) -> LightIntent:
-        """
-        Creates a LightIntent that carries the formation data if needed.
+        """Creates a LightIntent that carries the formation data if needed.
+
+        Uses the FormationManager to generate coordinate sets for specific shapes.
+
+        Args:
+            vp: The VisualParameters instance.
+
+        Returns:
+            A LightIntent object containing formation data.
         """
         shape_name = vp.visual_parameters.base_shape.value
         # Use FormationManager to get coords for specific shapes
@@ -314,6 +377,11 @@ class LogenesisEngine:
         )
 
     def enter_nirodha(self) -> LogenesisResponse:
+        """Transitions the system into the Nirodha (Stillness) state.
+
+        Returns:
+            A LogenesisResponse indicating the suspended state.
+        """
         self.state = LogenesisState.NIRODHA
         return LogenesisResponse(
             state=LogenesisState.NIRODHA,
@@ -324,6 +392,14 @@ class LogenesisEngine:
         )
 
     def _calculate_qualia(self, intent: IntentVector) -> VisualQualia:
+        """Derives visual qualia (color, shape, turbulence) from an intent vector.
+
+        Args:
+            intent: The intent vector.
+
+        Returns:
+            A VisualQualia object.
+        """
         r, g, b = 224, 224, 224
         if intent.subjective_weight > 0.3:
             factor = intent.subjective_weight
@@ -352,6 +428,14 @@ class LogenesisEngine:
         )
 
     def _calculate_audio(self, intent: IntentVector) -> AudioQualia:
+        """Derives audio qualia from an intent vector.
+
+        Args:
+            intent: The intent vector.
+
+        Returns:
+            An AudioQualia object.
+        """
         rhythm = 0.1 + (intent.decision_urgency * 0.8)
         amp = 0.5 + (intent.decision_urgency * 0.4)
         texture = "smooth"
@@ -360,11 +444,28 @@ class LogenesisEngine:
         return AudioQualia(rhythm_density=rhythm, tone_texture=texture, amplitude_bias=amp)
 
     def _calculate_physics(self, intent: IntentVector) -> PhysicsParams:
+        """Derives physics parameters (spawn rate, decay) from an intent vector.
+
+        Args:
+            intent: The intent vector.
+
+        Returns:
+            A PhysicsParams object.
+        """
         spawn_rate = int(2 + (intent.subjective_weight * 5) + (intent.decision_urgency * 15))
         decay = max(0.001, 0.01 + (intent.decision_urgency * 0.05))
         return PhysicsParams(spawn_rate=spawn_rate, decay_rate=decay)
 
     def _check_recall(self, text: str, memory_index: list) -> Optional[Any]:
+        """Checks if the input text matches any items in the memory index.
+
+        Args:
+            text: The input text.
+            memory_index: A list of memory items.
+
+        Returns:
+            A RecallProposal if a match is found, otherwise None.
+        """
         from .logenesis_schemas import RecallProposal
         text = text.lower()
         for item in memory_index:
@@ -379,6 +480,17 @@ class LogenesisEngine:
         return None
 
     def _drift_state(self, current_state: ExpressionState, input_intent: IntentVector) -> ExpressionState:
+        """Calculates the new state by drifting from the current state towards the input intent.
+
+        Uses a weighted interpolation (Lerp) based on inertia and urgency.
+
+        Args:
+            current_state: The current ExpressionState.
+            input_intent: The new target IntentVector.
+
+        Returns:
+            The new ExpressionState.
+        """
         urgency_factor = input_intent.decision_urgency
         base_inertia = 0.95
         effective_inertia = max(0.1, base_inertia - (0.8 * urgency_factor))
@@ -397,6 +509,18 @@ class LogenesisEngine:
         return ExpressionState(current_vector=new_vector, velocity=delta, inertia=effective_inertia, last_updated=datetime.now())
 
     def _synthesize_text(self, vector: IntentVector, raw_input: IntentVector, recalled_context: Optional[str] = None) -> str:
+        """Synthesizes a text response based on the intent vector (fallback mechanism).
+
+        Used when the LLM interpreter does not provide a text response.
+
+        Args:
+            vector: The drifted intent vector.
+            raw_input: The raw input intent vector.
+            recalled_context: Optional context string.
+
+        Returns:
+            A string response.
+        """
         if recalled_context: return f"Memory Trace Active: {recalled_context[:30]}..."
         is_urgent = vector.decision_urgency > 0.5
         is_subjective = vector.subjective_weight > 0.5
