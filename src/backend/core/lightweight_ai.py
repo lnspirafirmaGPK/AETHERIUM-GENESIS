@@ -4,11 +4,21 @@ import re
 from typing import Dict, Any, Union
 
 class LightweightAI:
+    """Lightweight AI Core.
+
+    A rule-based resolver for immediate feedback and baseline testing.
+    Handles simple touch and voice commands without invoking external LLMs.
     """
-    Lightweight AI Core
-    Rule-based resolver for immediate feedback and baseline testing.
-    """
+
     def resolve_intent(self, input_data: Dict[str, Any]) -> Union[LightIntent, SearchIntent]:
+        """Resolves raw input data into a structured intent.
+
+        Args:
+            input_data: A dictionary containing input type and parameters (e.g., touch region, voice text).
+
+        Returns:
+            A LightIntent or SearchIntent based on rule matching.
+        """
         input_type = input_data.get("type")
 
         if input_type == "touch":

@@ -8,16 +8,47 @@ import time
 import config
 
 class BaseAuthProvider(ABC):
+    """Abstract base class for authentication providers."""
+
     @abstractmethod
     def get_login_url(self, state: str) -> str:
+        """Generates the provider-specific login URL.
+
+        Args:
+            state: A random string to prevent CSRF attacks.
+
+        Returns:
+            The full URL to redirect the user to for authentication.
+        """
         pass
 
     @abstractmethod
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """Exchanges an authorization code for user identity and tokens.
+
+        Args:
+            code: The authorization code received from the provider callback.
+
+        Returns:
+            A tuple containing the user's IdentityProfile and TokenSet.
+
+        Raises:
+            httpx.HTTPStatusError: If the provider returns an error response.
+        """
         pass
 
 class MockAuthProvider(BaseAuthProvider):
+    """A mock authentication provider for development and testing."""
+
     def get_login_url(self, state: str) -> str:
+        """Returns a URL that immediately redirects to the callback with a mock code.
+
+        Args:
+            state: A random string to prevent CSRF attacks.
+
+        Returns:
+            The redirect URL with mock code and state.
+        """
         # Direct redirect to callback with a fake code
         params = {
             "code": "mock_auth_code_123",
@@ -26,6 +57,14 @@ class MockAuthProvider(BaseAuthProvider):
         return f"{config.GOOGLE_REDIRECT_URI}?{urllib.parse.urlencode(params)}"
 
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """Returns a fixed mock identity and token set.
+
+        Args:
+            code: The authorization code (ignored by the mock provider).
+
+        Returns:
+            A tuple containing a mock IdentityProfile and TokenSet.
+        """
         # Return fake user
         identity = IdentityProfile(
             provider="mock",
@@ -42,15 +81,23 @@ class MockAuthProvider(BaseAuthProvider):
         return identity, tokens
 
 class GoogleAuthProvider(BaseAuthProvider):
+    """Handles Google OAuth 2.0 authentication flow."""
+
     DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
     def __init__(self):
+        """Initializes the Google Auth Provider with credentials from config."""
         self.client_id = config.GOOGLE_CLIENT_ID
         self.client_secret = config.GOOGLE_CLIENT_SECRET
         self.redirect_uri = config.GOOGLE_REDIRECT_URI
         self._config = None
 
     async def _get_config(self):
+        """Fetches the Google OpenID configuration.
+
+        Returns:
+            A dictionary containing the OpenID configuration.
+        """
         if not self._config:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(self.DISCOVERY_URL)
@@ -58,6 +105,14 @@ class GoogleAuthProvider(BaseAuthProvider):
         return self._config
 
     def get_login_url(self, state: str) -> str:
+        """Constructs the Google OAuth 2.0 authorization URL.
+
+        Args:
+            state: A random string to prevent CSRF attacks.
+
+        Returns:
+            The full Google authorization URL.
+        """
         # We can hardcode the auth endpoint or fetch it. Hardcoding is faster for now but less robust.
         # Let's use standard endpoint.
         base_url = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -73,6 +128,17 @@ class GoogleAuthProvider(BaseAuthProvider):
         return f"{base_url}?{urllib.parse.urlencode(params)}"
 
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """Exchanges an authorization code for Google user identity and tokens.
+
+        Args:
+            code: The authorization code received from Google.
+
+        Returns:
+            A tuple containing the Google IdentityProfile and TokenSet.
+
+        Raises:
+            httpx.HTTPStatusError: If the token exchange or user info fetch fails.
+        """
         token_endpoint = "https://oauth2.googleapis.com/token"
 
         async with httpx.AsyncClient() as client:
@@ -116,6 +182,11 @@ class GoogleAuthProvider(BaseAuthProvider):
             return identity, tokens
 
 def get_auth_provider() -> BaseAuthProvider:
+    """Factory function to get the configured authentication provider.
+
+    Returns:
+        An instance of GoogleAuthProvider or MockAuthProvider based on config.
+    """
     if config.AUTH_PROVIDER == "google":
         return GoogleAuthProvider()
     return MockAuthProvider()

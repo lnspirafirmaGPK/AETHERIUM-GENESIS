@@ -18,6 +18,14 @@ signer = URLSafeTimedSerializer(config.SECRET_KEY, salt="logenesis-session")
 COOKIE_NAME = "logenesis_session"
 
 def get_current_user_id(request: Request) -> Optional[str]:
+    """Extracts and verifies the user ID from the signed session cookie.
+
+    Args:
+        request: The FastAPI request object.
+
+    Returns:
+        The user ID string if the cookie is present and valid, otherwise None.
+    """
     cookie = request.cookies.get(COOKIE_NAME)
     if not cookie:
         return None
@@ -30,6 +38,17 @@ def get_current_user_id(request: Request) -> Optional[str]:
 
 @router.get("/login")
 def login(request: Request):
+    """Initiates the OAuth 2.0 login flow.
+
+    Generates a state parameter for CSRF protection, sets it in a cookie,
+    and redirects the user to the configured authentication provider.
+
+    Args:
+        request: The FastAPI request object.
+
+    Returns:
+        A RedirectResponse to the provider's login URL.
+    """
     provider = get_auth_provider()
     # Generate random state for CSRF protection
     state = secrets.token_urlsafe(16)
@@ -47,6 +66,20 @@ def login(request: Request):
 
 @router.get("/callback")
 async def callback(request: Request):
+    """Handles the OAuth 2.0 callback from the provider.
+
+    Verifies the CSRF state, exchanges the authorization code for tokens,
+    creates a user session, and sets a signed session cookie.
+
+    Args:
+        request: The FastAPI request object containing query parameters.
+
+    Returns:
+        A RedirectResponse to the root URL upon success.
+
+    Raises:
+        HTTPException: If the code is missing, state is invalid, or authentication fails.
+    """
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     stored_state = request.cookies.get("oauth_state")
@@ -92,6 +125,15 @@ async def callback(request: Request):
 
 @router.get("/me")
 def get_me(request: Request):
+    """Retrieves the current authenticated user's profile and state.
+
+    Args:
+        request: The FastAPI request object.
+
+    Returns:
+        A dictionary containing authentication status, user profile, and Logenesis state.
+        Returns 401 status if not authenticated.
+    """
     user_id = get_current_user_id(request)
     if not user_id:
         return JSONResponse({"authenticated": False}, status_code=401)
@@ -108,6 +150,13 @@ def get_me(request: Request):
 
 @router.get("/logout")
 def logout():
+    """Logs out the user.
+
+    Clears the session cookie and redirects to the root.
+
+    Returns:
+        A RedirectResponse to the root URL.
+    """
     response = RedirectResponse(url="/")
     response.delete_cookie(COOKIE_NAME)
     return response

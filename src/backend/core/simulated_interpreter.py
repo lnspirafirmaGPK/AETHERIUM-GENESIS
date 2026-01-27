@@ -8,12 +8,22 @@ from .visual_schemas import (
 )
 
 class SimulatedIntentInterpreter(IntentInterpreter):
-    """
-    A deterministic interpreter for testing and fallback.
-    Maps keywords to specific EmbodimentContract.
+    """A deterministic interpreter for testing and fallback scenarios.
+
+    Maps specific keywords to predefined EmbodimentContracts, allowing for consistent
+    behavior verification without reliance on external LLM APIs.
     """
 
     async def interpret(self, text: str, context: Optional[Dict[str, Any]] = None) -> EmbodimentContract:
+        """Interprets text using keyword matching to generate a simulated contract.
+
+        Args:
+            text: The user input text.
+            context: Optional context (unused in simulation).
+
+        Returns:
+            A deterministic EmbodimentContract based on input keywords.
+        """
         text = text.lower()
 
         # Defaults
