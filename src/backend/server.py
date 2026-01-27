@@ -13,11 +13,13 @@ from fastapi.staticfiles import StaticFiles
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
 from src.backend.core.visual_schemas import TemporalPhase, IntentCategory, BaseShape
+from src.backend.auth.routes import router as auth_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")
 
 app = FastAPI()
+app.include_router(auth_router)
 
 # --- DEEPGRAM INTERFACE STUB ---
 class DeepgramTranscriber:
