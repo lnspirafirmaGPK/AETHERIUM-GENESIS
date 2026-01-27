@@ -8,9 +8,12 @@ pydantic
 requests
 google-generativeai
 Pillow
-httpx
+httpx>=0.24.0
 torch
 diffusers
 transformers
 accelerate
 websockets
+python-jose
+itsdangerous
+python-dotenv
