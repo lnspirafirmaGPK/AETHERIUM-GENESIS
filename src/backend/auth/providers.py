@@ -8,16 +8,49 @@ import time
 import config
 
 class BaseAuthProvider(ABC):
+    """
+    Abstract Base Class for OAuth 2.0 Providers.
+    Defines the contract for obtaining login URLs and exchanging authorization codes.
+    """
     @abstractmethod
     def get_login_url(self, state: str) -> str:
+        """
+        Generates the authorization redirect URL.
+
+        Args:
+            state (str): A random CSRF token to be included in the redirect.
+
+        Returns:
+            str: The full URL to redirect the user to.
+        """
         pass
 
     @abstractmethod
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """
+        Exchanges the authorization code for access tokens and user identity.
+
+        Args:
+            code (str): The authorization code received from the callback.
+
+        Returns:
+            Tuple[IdentityProfile, TokenSet]: The authenticated user's profile and tokens.
+
+        Raises:
+            httpx.HTTPStatusError: If the provider returns an error response.
+        """
         pass
 
 class MockAuthProvider(BaseAuthProvider):
+    """
+    A simulated OAuth provider for local development.
+    Bypasses external network calls and returns a fixed mock identity.
+    """
     def get_login_url(self, state: str) -> str:
+        """
+        Returns a URL that immediately redirects back to the callback endpoint.
+        Simulates a successful login without user interaction.
+        """
         # Direct redirect to callback with a fake code
         params = {
             "code": "mock_auth_code_123",
@@ -26,6 +59,9 @@ class MockAuthProvider(BaseAuthProvider):
         return f"{config.GOOGLE_REDIRECT_URI}?{urllib.parse.urlencode(params)}"
 
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """
+        Returns a hardcoded mock identity ('Logenesis Traveler') and tokens.
+        """
         # Return fake user
         identity = IdentityProfile(
             provider="mock",
@@ -42,6 +78,10 @@ class MockAuthProvider(BaseAuthProvider):
         return identity, tokens
 
 class GoogleAuthProvider(BaseAuthProvider):
+    """
+    Production-grade OAuth 2.0 provider for Google Identity Services.
+    Uses standard Authorization Code Flow with offline access (Refresh Tokens).
+    """
     DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
     def __init__(self):
@@ -51,6 +91,7 @@ class GoogleAuthProvider(BaseAuthProvider):
         self._config = None
 
     async def _get_config(self):
+        """Lazy-loads the OpenID Connect discovery document."""
         if not self._config:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(self.DISCOVERY_URL)
@@ -58,6 +99,10 @@ class GoogleAuthProvider(BaseAuthProvider):
         return self._config
 
     def get_login_url(self, state: str) -> str:
+        """
+        Constructs the Google OAuth 2.0 authorization URL.
+        Requests 'openid email profile' scopes and 'offline' access type.
+        """
         # We can hardcode the auth endpoint or fetch it. Hardcoding is faster for now but less robust.
         # Let's use standard endpoint.
         base_url = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -73,6 +118,10 @@ class GoogleAuthProvider(BaseAuthProvider):
         return f"{base_url}?{urllib.parse.urlencode(params)}"
 
     async def exchange_code(self, code: str) -> Tuple[IdentityProfile, TokenSet]:
+        """
+        Exchanges the auth code with Google's token endpoint.
+        Also fetches the user profile from the userinfo endpoint.
+        """
         token_endpoint = "https://oauth2.googleapis.com/token"
 
         async with httpx.AsyncClient() as client:
@@ -116,6 +165,12 @@ class GoogleAuthProvider(BaseAuthProvider):
             return identity, tokens
 
 def get_auth_provider() -> BaseAuthProvider:
+    """
+    Factory function to instantiate the configured Auth Provider.
+
+    Returns:
+        BaseAuthProvider: Either GoogleAuthProvider or MockAuthProvider based on config.AUTH_PROVIDER.
+    """
     if config.AUTH_PROVIDER == "google":
         return GoogleAuthProvider()
     return MockAuthProvider()

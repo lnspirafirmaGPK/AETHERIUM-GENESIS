@@ -18,6 +18,15 @@ signer = URLSafeTimedSerializer(config.SECRET_KEY, salt="logenesis-session")
 COOKIE_NAME = "logenesis_session"
 
 def get_current_user_id(request: Request) -> Optional[str]:
+    """
+    Extracts and validates the current User ID from the signed session cookie.
+
+    Args:
+        request: The incoming HTTP request containing cookies.
+
+    Returns:
+        Optional[str]: The user ID (sub) if valid, None otherwise.
+    """
     cookie = request.cookies.get(COOKIE_NAME)
     if not cookie:
         return None
@@ -30,6 +39,14 @@ def get_current_user_id(request: Request) -> Optional[str]:
 
 @router.get("/login")
 def login(request: Request):
+    """
+    Initiates the OAuth 2.0 Authorization Code flow.
+    Redirects the user to the configured Identity Provider's login page.
+
+    Side Effects:
+        - Generates a random CSRF state.
+        - Sets an HTTP-only cookie `oauth_state` for CSRF validation.
+    """
     provider = get_auth_provider()
     # Generate random state for CSRF protection
     state = secrets.token_urlsafe(16)
@@ -47,6 +64,21 @@ def login(request: Request):
 
 @router.get("/callback")
 async def callback(request: Request):
+    """
+    Handles the OAuth provider callback.
+    Exchanges the authorization code for tokens and creates a session.
+
+    Query Params:
+        code (str): The authorization code.
+        state (str): The returned CSRF state token.
+
+    Returns:
+        RedirectResponse: Redirects to the root application URL ('/') upon success.
+
+    Raises:
+        HTTPException(400): If code is missing or state is invalid (CSRF failure).
+        HTTPException(500): If the token exchange fails.
+    """
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     stored_state = request.cookies.get("oauth_state")
@@ -92,6 +124,15 @@ async def callback(request: Request):
 
 @router.get("/me")
 def get_me(request: Request):
+    """
+    Returns the current authenticated user's profile and cognitive state.
+    Used by the frontend to verify session validity.
+
+    Returns:
+        JSONResponse:
+            - { authenticated: True, user: ..., logenesis_state: ... }
+            - { authenticated: False } (if no valid session)
+    """
     user_id = get_current_user_id(request)
     if not user_id:
         return JSONResponse({"authenticated": False}, status_code=401)
@@ -108,6 +149,10 @@ def get_me(request: Request):
 
 @router.get("/logout")
 def logout():
+    """
+    Terminates the user session by clearing the session cookie.
+    Does not invalidate the OAuth Refresh Token on the backend (yet).
+    """
     response = RedirectResponse(url="/")
     response.delete_cookie(COOKIE_NAME)
     return response
