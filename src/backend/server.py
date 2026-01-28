@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
@@ -253,5 +254,8 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Server Error: {e}")
 
 # Mount static files (Must be after specific routes)
-app.mount("/gunui", StaticFiles(directory="gunui"), name="gunui")
-app.mount("/", StaticFiles(directory=".", html=True), name="root")
+app.mount("/gunui", StaticFiles(directory="gunui", html=True), name="gunui")
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/gunui/")
