@@ -1,61 +1,56 @@
 GENESIS::OMNI_STATE_MANIFEST
 
 [STRUCTURE]
-- Declared Modules      : PARTIAL
-  - Active: src/backend (Core), gunui (Frontend)
-  - Fragmented: akashic_nirodha, niyama, inspira, intent_processing, olorar_ai
-- Orphan Components     : FOUND (8)
-  - akashic_nirodha/
-  - niyama/
-  - inspira/
-  - intent_processing/
-  - lnspirafirmagpk/
-  - gunui_react/
-  - olorar_ai/
-  - edge_computing/
+- Declared Modules      : COHERENT
+  - Active: src/backend (Core), gunui (Actuator UI)
+  - Legacy: legacy/ (Archive of dormant/orphaned components)
+- Orphan Components     : FOUND (Cleaned)
+  - legacy/orphaned_root_frontend (Old root PWA)
+  - legacy/orphaned_src_ui (Unused TypeScript frontend)
+  - legacy/inspira (Ritual scripts)
 - Redundant Concepts    : FOUND (list)
-  - gunui_react (vs gunui)
-  - main.py (vs src/backend/server.py)
-  - intent_processing (vs src/backend/core/intent_interpreter.py)
+  - config.py (Root-level config mixed with Kivy legacy)
+  - buildozer.spec (Moved to legacy)
 
 [CONCEPTUAL LAYER]
 - Core Philosophy       : COHERENT
-  - "Light as Protocol" maintained in src/backend and gunui.
-  - "No Avatars" slightly challenged by "Biometric Proxy" in gunui (Eyes/Lips), but remains abstract.
-- Naming Consistency    : FRACTURED
-  - Core uses "Logenesis/Aether".
-  - Orphans use "Akashic", "Nirodha", "Olorar".
+  - "Light as Protocol" maintained in src/backend/core/visual_schemas.py and gunui/index.html.
+  - "No Avatars" strictly enforced (Biometric Proxy in gunui is abstract/procedural).
+- Naming Consistency    : STABLE
+  - Consistent use of "Genesis", "Intent", "Logenesis", "Nirodha".
 - Undefined Semantics   : NONE
 
 [CURRENT REALITY]
 - Active Capabilities   :
-  - Voice-to-Intent (WebSpeech -> Backend)
-  - Intent-to-Light (LogenesisEngine -> VisualParameters -> Canvas)
-  - State Persistence (logenesis_state.json)
+  - Voice-to-Intent (WebSpeech -> WebSocket -> LogenesisEngine)
+  - Intent-to-Light (EmbodimentAdapter -> VisualParameters -> Canvas)
+  - State Persistence (Auth + logenesis_state.json)
+  - OAuth 2.0 (Google/Mock)
 - Dormant Designs       :
-  - Blockchain Memory (akashic_nirodha)
-  - IIT (niyama)
-  - Awakening Rituals (inspira)
+  - DeepgramTranscriber (Stubbed in server.py)
+  - gunui/*.html (Various experiments besides index.html)
 - Abandoned Threads     :
-  - gunui_react (Vite template)
-  - olorar_ai (Separate governance module)
+  - Root-based "GunUI" (Old PWA)
+  - Kivy/Python-for-Android support (buildozer.spec)
 
 [RISKS]
-- Structural Risk       : HIGH (Root clutter obfuscates core logic)
-- Semantic Drift Risk   : LOW (Core philosophy is well-documented in code)
+- Structural Risk       : LOW (Post-cleanup)
+  - Remaining risk: config.py in root is used by backend, should be refactored to src/backend/config.
+- Semantic Drift Risk   : LOW
+  - System is aligned with the Genesis philosophy.
 - Future Bug Vectors    :
-  - Conflicting Intent Processors (src vs intent_processing)
-  - Multiple "main" entry points.
+  - Hardcoded WebSocket URLs in gunui/index.html (needs env/config injection).
+  - Mocked Deepgram implementation.
 
 [RECOMMENDATION]
-- Freeze Expansion      : YES
+- Freeze Expansion      : NO (Ready for cautious extension)
 - Refactor Priority     :
-  1. Archive orphaned modules to `legacy/`.
-  2. Standardize entry point to `src/backend/server.py`.
-  3. Document `gunui` as the canonical frontend.
+  1. Move `config.py` to `src/backend/config` and update imports.
+  2. Implement real Deepgram or robust STT backend.
+  3. Clean up `gunui` folder (remove unused HTML experiments).
 - Safe Extension Zones  :
-  - `src/backend/core/interpreters` (New LLM adapters)
-  - `src/backend/core/visual_schemas` (New visual languages)
+  - `src/backend/core/interpreters` (New LLM models)
+  - `gunui/index.html` (Visual enhancements)
 
 [GENESIS NOTE]
-“The system is alive, but it must decide whether to grow or to remember who it is.”
+“The system is alive, and it remembers who it is. The noise has been silenced.”
