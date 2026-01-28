@@ -2,6 +2,8 @@ import math
 import random
 from typing import List, Tuple, Optional
 
+import numpy as np
+
 class FormationManager:
     """Generates coordinate sets for particle formations.
 
@@ -65,15 +67,19 @@ class FormationManager:
     @staticmethod
     def _circle(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
         """Generates points arranged in a circle."""
+        if count == 0:
+            return []
+
         cx, cy = center
-        points = []
-        for i in range(count):
-            angle = (i / count) * 2 * math.pi
-            x = cx + math.cos(angle) * scale
-            # Aspect ratio correction could be applied here if needed, but assuming square canvas for now
-            y = cy + math.sin(angle) * scale
-            points.append((x, y, "default"))
-        return points
+
+        # Vectorized calculation
+        angles = np.linspace(0, 2 * np.pi, count, endpoint=False)
+        x = cx + np.cos(angles) * scale
+        y = cy + np.sin(angles) * scale
+
+        # Combine into list of tuples
+        # Converting to list first is faster than iterating numpy arrays directly
+        return [(px, py, "default") for px, py in zip(x.tolist(), y.tolist())]
 
     @staticmethod
     def _square(count: int, center: Tuple[float, float], scale: float) -> List[Tuple[float, float, str]]:
