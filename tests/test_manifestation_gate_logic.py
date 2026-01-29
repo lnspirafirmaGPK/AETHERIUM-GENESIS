@@ -7,8 +7,8 @@ from src.backend.core.visual_schemas import VisualParameters, IntentCategory, Ba
 async def test_manifestation_gate_command():
     engine = LogenesisEngine()
     engine.interpreter = MagicMock()
+    engine.adapter = MagicMock()
 
-    # Mock interpreter return
     vp = VisualParameters(
         intent_category=IntentCategory.COMMAND,
         emotional_valence=0.0,
@@ -21,7 +21,10 @@ async def test_manifestation_gate_command():
             color_palette="#FFFFFF"
         )
     )
-    engine.interpreter.interpret = AsyncMock(return_value=vp)
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Command processed."
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+    engine.adapter.translate.return_value = vp
 
     response = await engine.process("command")
     assert response.manifestation_granted is True
@@ -31,6 +34,7 @@ async def test_manifestation_gate_command():
 async def test_manifestation_gate_chat_low_energy():
     engine = LogenesisEngine()
     engine.interpreter = MagicMock()
+    engine.adapter = MagicMock()
 
     vp = VisualParameters(
         intent_category=IntentCategory.CHAT,
@@ -44,7 +48,10 @@ async def test_manifestation_gate_chat_low_energy():
             color_palette="#FFFFFF"
         )
     )
-    engine.interpreter.interpret = AsyncMock(return_value=vp)
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Just chatting."
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+    engine.adapter.translate.return_value = vp
 
     response = await engine.process("chat")
     assert response.manifestation_granted is False
@@ -54,6 +61,7 @@ async def test_manifestation_gate_chat_low_energy():
 async def test_manifestation_gate_chat_high_energy():
     engine = LogenesisEngine()
     engine.interpreter = MagicMock()
+    engine.adapter = MagicMock()
 
     vp = VisualParameters(
         intent_category=IntentCategory.CHAT,
@@ -67,7 +75,10 @@ async def test_manifestation_gate_chat_high_energy():
             color_palette="#FFFFFF"
         )
     )
-    engine.interpreter.interpret = AsyncMock(return_value=vp)
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Excited chat."
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+    engine.adapter.translate.return_value = vp
 
     response = await engine.process("chat")
     assert response.manifestation_granted is True
@@ -77,6 +88,7 @@ async def test_manifestation_gate_chat_high_energy():
 async def test_manifestation_gate_chat_high_emotion():
     engine = LogenesisEngine()
     engine.interpreter = MagicMock()
+    engine.adapter = MagicMock()
 
     vp = VisualParameters(
         intent_category=IntentCategory.CHAT,
@@ -90,7 +102,10 @@ async def test_manifestation_gate_chat_high_emotion():
             color_palette="#FFFFFF"
         )
     )
-    engine.interpreter.interpret = AsyncMock(return_value=vp)
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Emotional chat."
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+    engine.adapter.translate.return_value = vp
 
     response = await engine.process("chat")
     assert response.manifestation_granted is True
@@ -99,6 +114,7 @@ async def test_manifestation_gate_chat_high_emotion():
 async def test_manifestation_gate_chat_high_turbulence():
     engine = LogenesisEngine()
     engine.interpreter = MagicMock()
+    engine.adapter = MagicMock()
 
     vp = VisualParameters(
         intent_category=IntentCategory.CHAT,
@@ -112,7 +128,10 @@ async def test_manifestation_gate_chat_high_turbulence():
             color_palette="#FFFFFF"
         )
     )
-    engine.interpreter.interpret = AsyncMock(return_value=vp)
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Turbulent chat."
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+    engine.adapter.translate.return_value = vp
 
     response = await engine.process("chat")
     assert response.manifestation_granted is True

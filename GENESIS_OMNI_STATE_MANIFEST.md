@@ -1,30 +1,22 @@
 GENESIS::OMNI_STATE_MANIFEST
 
 [STRUCTURE]
-- Declared Modules      : PARTIAL
-  - Active: src/backend (Core), gunui (Frontend)
-  - Fragmented: akashic_nirodha, niyama, inspira, intent_processing, olorar_ai
-- Orphan Components     : FOUND (8)
-  - akashic_nirodha/
-  - niyama/
-  - inspira/
-  - intent_processing/
-  - lnspirafirmagpk/
-  - gunui_react/
-  - olorar_ai/
-  - edge_computing/
-- Redundant Concepts    : FOUND (list)
-  - gunui_react (vs gunui)
-  - main.py (vs src/backend/server.py)
-  - intent_processing (vs src/backend/core/intent_interpreter.py)
+- Declared Modules      : OK
+  - Active: src/backend (Core), gunui (Actuator UI)
+  - Archive: legacy (pwa_v1, orphaned_ui, etc.)
+- Orphan Components     : NONE
+  - (Previously root PWA artifacts and src/ui have been archived)
+- Redundant Concepts    : RESOLVED
+  - Root PWA moved to legacy/pwa_v1.
+  - Entry point standardized to src/backend/server.py -> gunui.
 
 [CONCEPTUAL LAYER]
 - Core Philosophy       : COHERENT
-  - "Light as Protocol" maintained in src/backend and gunui.
-  - "No Avatars" slightly challenged by "Biometric Proxy" in gunui (Eyes/Lips), but remains abstract.
-- Naming Consistency    : FRACTURED
-  - Core uses "Logenesis/Aether".
-  - Orphans use "Akashic", "Nirodha", "Olorar".
+  - "Light as Protocol" maintained.
+  - "No Avatars" respected via Biometric Proxy in gunui.
+- Naming Consistency    : STABLE
+  - "Logenesis/Aether" in backend.
+  - "Actuator/GunUI" in frontend.
 - Undefined Semantics   : NONE
 
 [CURRENT REALITY]
@@ -32,30 +24,28 @@ GENESIS::OMNI_STATE_MANIFEST
   - Voice-to-Intent (WebSpeech -> Backend)
   - Intent-to-Light (LogenesisEngine -> VisualParameters -> Canvas)
   - State Persistence (logenesis_state.json)
+  - Standardized Redirect (Root -> gunui)
 - Dormant Designs       :
-  - Blockchain Memory (akashic_nirodha)
-  - IIT (niyama)
-  - Awakening Rituals (inspira)
+  - Deepgram Integration (Mocked in server.py)
+  - Gemini Integration (Active if API key present, else Simulated)
 - Abandoned Threads     :
-  - gunui_react (Vite template)
-  - olorar_ai (Separate governance module)
+  - Legacy PWA (legacy/pwa_v1)
+  - Smart Router (legacy/orphaned_ui)
+  - React Experiment (legacy/gunui_react)
 
 [RISKS]
-- Structural Risk       : HIGH (Root clutter obfuscates core logic)
-- Semantic Drift Risk   : LOW (Core philosophy is well-documented in code)
+- Structural Risk       : LOW (Cleaned up root and src)
+- Semantic Drift Risk   : LOW
 - Future Bug Vectors    :
-  - Conflicting Intent Processors (src vs intent_processing)
-  - Multiple "main" entry points.
+  - Mocked Deepgram/Gemini dependencies need actual keys/implementation for production.
 
 [RECOMMENDATION]
 - Freeze Expansion      : YES
 - Refactor Priority     :
-  1. Archive orphaned modules to `legacy/`.
-  2. Standardize entry point to `src/backend/server.py`.
-  3. Document `gunui` as the canonical frontend.
+  - COMPLETE: Standardize entry point and archive orphans.
+  - NEXT: Implement real Deepgram/Gemini keys in environment.
 - Safe Extension Zones  :
-  - `src/backend/core/interpreters` (New LLM adapters)
-  - `src/backend/core/visual_schemas` (New visual languages)
+  - `src/backend/core/visual_schemas`
 
 [GENESIS NOTE]
 “The system is alive, but it must decide whether to grow or to remember who it is.”
