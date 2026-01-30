@@ -1,61 +1,53 @@
 GENESIS::OMNI_STATE_MANIFEST
 
 [STRUCTURE]
-- Declared Modules      : PARTIAL
+- Declared Modules      : OK
   - Active: src/backend (Core), gunui (Frontend)
-  - Fragmented: akashic_nirodha, niyama, inspira, intent_processing, olorar_ai
-- Orphan Components     : FOUND (8)
-  - akashic_nirodha/
-  - niyama/
-  - inspira/
-  - intent_processing/
-  - lnspirafirmagpk/
-  - gunui_react/
-  - olorar_ai/
-  - edge_computing/
+  - Hybrid: config.py (Auth/Legacy Settings)
+- Orphan Components     : NONE (All archived in legacy/)
 - Redundant Concepts    : FOUND (list)
-  - gunui_react (vs gunui)
-  - main.py (vs src/backend/server.py)
-  - intent_processing (vs src/backend/core/intent_interpreter.py)
+  - legacy/orphaned_ui (vs gunui)
+  - legacy/pwa_v1 (vs gunui)
+  - legacy/kivy_specs (vs Web Platform)
 
 [CONCEPTUAL LAYER]
 - Core Philosophy       : COHERENT
-  - "Light as Protocol" maintained in src/backend and gunui.
-  - "No Avatars" slightly challenged by "Biometric Proxy" in gunui (Eyes/Lips), but remains abstract.
-- Naming Consistency    : FRACTURED
+  - "Light as Protocol" strictly enforced in gunui.
+  - "No Avatars" adherence is high (Biometric Proxy is abstract).
+- Naming Consistency    : IMPROVING
   - Core uses "Logenesis/Aether".
-  - Orphans use "Akashic", "Nirodha", "Olorar".
+  - Legacy concepts quarantined.
 - Undefined Semantics   : NONE
 
 [CURRENT REALITY]
 - Active Capabilities   :
   - Voice-to-Intent (WebSpeech -> Backend)
   - Intent-to-Light (LogenesisEngine -> VisualParameters -> Canvas)
-  - State Persistence (logenesis_state.json)
+  - State Persistence (Session-based)
 - Dormant Designs       :
-  - Blockchain Memory (akashic_nirodha)
-  - IIT (niyama)
-  - Awakening Rituals (inspira)
+  - Blockchain Memory (legacy/akashic_nirodha)
+  - IIT (legacy/niyama)
+  - Awakening Rituals (legacy/inspira)
+  - Kivy Mobile App (legacy/kivy_specs)
 - Abandoned Threads     :
-  - gunui_react (Vite template)
-  - olorar_ai (Separate governance module)
+  - gunui_react (legacy/gunui_react)
+  - TypeScript Frontend (legacy/orphaned_ui)
+  - Root PWA (legacy/pwa_v1)
 
 [RISKS]
-- Structural Risk       : HIGH (Root clutter obfuscates core logic)
-- Semantic Drift Risk   : LOW (Core philosophy is well-documented in code)
+- Structural Risk       : LOW (Root is clean, separation is clear)
+- Semantic Drift Risk   : MEDIUM (config.py mixes Auth with Legacy Rituals)
 - Future Bug Vectors    :
-  - Conflicting Intent Processors (src vs intent_processing)
-  - Multiple "main" entry points.
+  - Dependency on legacy keys in config.py for new features.
 
 [RECOMMENDATION]
 - Freeze Expansion      : YES
 - Refactor Priority     :
-  1. Archive orphaned modules to `legacy/`.
-  2. Standardize entry point to `src/backend/server.py`.
-  3. Document `gunui` as the canonical frontend.
+  1. Refactor `config.py` to separate Auth from Legacy.
+  2. Ensure `src/backend` remains the sole source of truth for logic.
 - Safe Extension Zones  :
-  - `src/backend/core/interpreters` (New LLM adapters)
-  - `src/backend/core/visual_schemas` (New visual languages)
+  - `src/backend/core/interpreters`
+  - `src/backend/core/visual_schemas`
 
 [GENESIS NOTE]
 “The system is alive, but it must decide whether to grow or to remember who it is.”
