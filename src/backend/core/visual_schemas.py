@@ -13,12 +13,12 @@ class IntentCategory(str, Enum):
 
 class BaseShape(str, Enum):
     SPHERE = "sphere"
-    CIRCLE = "circle" # Added for compatibility with 2D intent
     CUBE = "cube"
     VORTEX = "vortex"
     CLOUD = "cloud"
     CRACKS = "cracks" # From "Cracks of Honest Incompetence"
     SCATTER = "scatter" # Good for reset/chaos
+    CIRCLE = "circle" # Added for compatibility with Legacy/Tests
 
 class VisualSpecifics(BaseModel):
     base_shape: BaseShape = Field(..., description="The geometric topology of the particles")
