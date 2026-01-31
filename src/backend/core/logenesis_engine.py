@@ -304,7 +304,8 @@ class LogenesisEngine:
         # For conversational intent (CHAT), check thresholds
         if visual_params.intent_category == IntentCategory.CHAT:
             # Manifest if high energy
-            if visual_params.energy_level > 0.6:
+            # Analytic thoughts (Effort=0.8) result in Energy=0.52, so we lower threshold to 0.5
+            if visual_params.energy_level > 0.5:
                 return True
             # Manifest if strong emotional valence
             if abs(visual_params.emotional_valence) > 0.6:

@@ -18,6 +18,7 @@ class BaseShape(str, Enum):
     CLOUD = "cloud"
     CRACKS = "cracks" # From "Cracks of Honest Incompetence"
     SCATTER = "scatter" # Good for reset/chaos
+    CIRCLE = "circle" # Added for compatibility with Legacy/Tests
 
 class VisualSpecifics(BaseModel):
     base_shape: BaseShape = Field(..., description="The geometric topology of the particles")
