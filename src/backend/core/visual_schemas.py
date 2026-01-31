@@ -13,6 +13,7 @@ class IntentCategory(str, Enum):
 
 class BaseShape(str, Enum):
     SPHERE = "sphere"
+    CIRCLE = "circle" # Added for compatibility with 2D intent
     CUBE = "cube"
     VORTEX = "vortex"
     CLOUD = "cloud"

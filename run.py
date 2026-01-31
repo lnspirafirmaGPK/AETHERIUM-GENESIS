@@ -1,17 +1,31 @@
-import sys
-import os
 import uvicorn
+import os
+import sys
+from dotenv import load_dotenv
+
+# 1. Load Environment Variables
+load_dotenv()
+
+# 2. Add 'src' to Python Path to ensure imports work correctly
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
-    # Add the current directory to sys.path to resolve src modules
-    current_dir = os.path.abspath(".")
-    if current_dir not in sys.path:
-        sys.path.insert(0, current_dir)
+    print("\n=================================================")
+    print("   AETHERIUM GENESIS: CENTRAL SERVER (CORE)   ")
+    print("=================================================")
+    print("Mode: Active")
+    print("Protocol: WebSocket & HTTP")
+    print("Port: 8000")
+    print("Status: Awakening...\n")
 
-    print(f"Initializing AETHERIUM GENESIS System...")
-    print(f"Root Directory: {current_dir}")
-    print("Target: src.backend.server:app")
-
-    # Run Uvicorn
-    # Using reload=True for development convenience as requested
-    uvicorn.run("src.backend.server:app", host="0.0.0.0", port=8000, reload=True)
+    # 3. Run the FastAPI Server using Uvicorn
+    # Reload is enabled for development convenience
+    try:
+        uvicorn.run(
+            "src.backend.server:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=True
+        )
+    except KeyboardInterrupt:
+        print("\n[System]: Shutting down Genesis Core...")

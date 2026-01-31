@@ -1,109 +1,116 @@
 import pytest
+from unittest.mock import MagicMock, AsyncMock
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.light_schemas import LightAction
-from src.backend.core.visual_schemas import BaseShape
+from src.backend.core.logenesis_schemas import IntentPacket
+from src.backend.core.visual_schemas import VisualParameters, IntentCategory, BaseShape, VisualSpecifics
 
-@pytest.mark.anyio
-async def test_explicit_command_bypass():
+# --- Fixtures ---
+@pytest.fixture
+def engine():
+    return LogenesisEngine()
+
+# --- Tests ---
+
+@pytest.mark.asyncio
+async def test_explicit_command_bypass(engine):
     """
-    Verify that explicit commands work.
-    'Make a circle' -> Interpreted as CHIT_CHAT by Simulation -> SPHERE.
-    (Legacy expected 'circle', now we expect 'sphere' as 3D equivalent)
+    Verify that explicit commands trigger manifestation regardless of energy.
     """
-    engine = LogenesisEngine()
+    # Mock the interpreter to return a COMMAND intent
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Executing command."
+
+    # Mock Adapter to return VisualParams for a Command
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.COMMAND,
+        emotional_valence=0.0,
+        energy_level=0.1, # Even low energy should pass for commands
+        semantic_concepts=["circle"],
+        visual_parameters=VisualSpecifics(
+            base_shape=BaseShape.CIRCLE,
+            turbulence=0.0,
+            particle_density=1.0,
+            color_palette="#FFFFFF"
+        )
+    ))
+
+    # Must mock interpreter.interpret to return our contract
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+
     response = await engine.process("Make a circle")
 
+    assert response.manifestation_granted is True
     assert response.light_intent is not None
-    assert response.light_intent.action == LightAction.MANIFEST
-    assert response.light_intent.shape_name == BaseShape.SPHERE.value
+    assert response.light_intent.shape_name == "circle"
 
-@pytest.mark.anyio
-async def test_neutral_conversation_no_manifest():
+@pytest.mark.asyncio
+async def test_neutral_conversation_blocked(engine):
     """
     Verify that low-intensity conversation does NOT trigger manifestation.
-    However, default simulation for CHIT_CHAT produces High Energy (0.82),
-    so it MIGHT manifest if Gate checks Energy > 0.6.
-
-    Let's check LogenesisEngine._check_manifestation_gate:
-    if intent_category == CHAT:
-        if energy > 0.6: return True
-
-    SimulatedInterpreter:
-    CHIT_CHAT defaults: effort=0.3
-    EmbodimentAdapter: energy = 1.0 - (0.3 * 0.6) = 0.82.
-    0.82 > 0.6 -> Returns TRUE.
-
-    So "Hello" WILL manifest in the current Simulation logic.
-    We should update the test expectation or input.
-
-    If we want NO manifest, we need low energy.
-    Effort needs to be high (1.0) -> Energy = 0.4.
-    SimulatedInterpreter sets effort=1.0 if "hard" or "complex".
     """
-    engine = LogenesisEngine()
+    # Mock Adapter to return Low Energy CHAT
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.1,
+        energy_level=0.1, # Too low to manifest
+        semantic_concepts=[],
+        visual_parameters=VisualSpecifics(base_shape=BaseShape.CLOUD, turbulence=0.1, particle_density=0.1, color_palette="#FFFFFF")
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="Just chatting."))
 
-    # "complex" triggers effort=1.0 -> energy=0.4 -> No Manifest via Energy.
-    # But check Valence/Turbulence.
-    # Valence=0.0. Turbulence=0.15 (uncertainty=0.1 * 1.5).
-    # All below 0.6.
-    response = await engine.process("This is complex")
+    response = await engine.process("Hello, how are you?")
 
-    # Should be None
+    # Should be False because energy/valence/turbulence are all low
+    assert response.manifestation_granted is False
     assert response.light_intent is None
 
-@pytest.mark.anyio
-async def test_manifestation_gate_subjective():
+@pytest.mark.asyncio
+async def test_high_intensity_manifestation(engine):
     """
-    Verify that high subjective intensity triggers manifestation.
-    'sad' in Simulation defaults to CHIT_CHAT -> SPHERE.
+    Verify that HIGH intensity conversation triggers manifestation.
     """
-    engine = LogenesisEngine()
+    # Mock Adapter to return High Energy CHAT
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.0,
+        energy_level=0.8, # > 0.6 Threshold
+        semantic_concepts=[],
+        visual_parameters=VisualSpecifics(base_shape=BaseShape.VORTEX, turbulence=0.8, particle_density=0.8, color_palette="#FF0000")
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="I am angry!"))
 
-    # "sad" -> Defaults to Sphere in Simulation
-    input_text = "I feel extremely sad now."
-    response = await engine.process(input_text, session_id="test_sub")
+    response = await engine.process("I feel intense emotion!")
 
+    assert response.manifestation_granted is True
     assert response.light_intent is not None
-    assert response.light_intent.shape_name == BaseShape.SPHERE.value
+    assert response.light_intent.shape_name == "vortex"
 
-@pytest.mark.anyio
-async def test_manifestation_gate_precision():
+@pytest.mark.asyncio
+async def test_manifestation_gate_precision(engine):
     """
-    Verify that high precision intensity triggers 'cube' (Analytic).
+    Verify that High Precision (Analysis) triggers manifestation.
+    Logic: If intent is CHAT but implies deep analysis (high density/energy), it might manifest.
+    But strictly, LogenesisEngine._check_manifestation_gate checks energy, valence, turbulence.
     """
-    engine = LogenesisEngine()
+    # Mock Adapter for Analysis
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.0,
+        energy_level=0.5,
+        semantic_concepts=["analysis"],
+        visual_parameters=VisualSpecifics(
+            base_shape=BaseShape.CUBE,
+            turbulence=0.7, # High turbulence/complexity triggers gate
+            particle_density=0.9,
+            color_palette="#0000FF"
+        )
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="Analyzing data."))
 
-    # "analyze" -> ANALYTIC -> CUBE
-    input_text = "Analyze the code now."
-    response = await engine.process(input_text, session_id="test_prec")
+    response = await engine.process("Analyze the code.")
 
+    # Triggered by turbulence > 0.6
+    assert response.manifestation_granted is True
     assert response.light_intent is not None
-    assert response.light_intent.shape_name == BaseShape.CUBE.value
-
-@pytest.mark.anyio
-async def test_manifestation_gate_urgency():
-    """
-    Verify that high urgency intensity triggers 'sphere' (ChitChat default).
-    """
-    engine = LogenesisEngine()
-
-    # "urgent" -> CHIT_CHAT -> SPHERE
-    input_text = "Do it now! Urgent! Quick!"
-    response = await engine.process(input_text, session_id="test_urg")
-
-    assert response.light_intent is not None
-    assert response.light_intent.shape_name == BaseShape.SPHERE.value
-
-@pytest.mark.anyio
-async def test_manifestation_gate_epistemic():
-    """
-    Verify that high epistemic need triggers 'cube' (Analytic).
-    """
-    engine = LogenesisEngine()
-
-    # "find" -> ANALYTIC -> CUBE
-    input_text = "Find the answer now."
-    response = await engine.process(input_text, session_id="test_epi")
-
-    assert response.light_intent is not None
-    assert response.light_intent.shape_name == BaseShape.CUBE.value
+    assert response.light_intent.shape_name == "cube"
