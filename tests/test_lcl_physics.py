@@ -1,7 +1,7 @@
 import time
 import pytest
-from src.backend.core.lcl import LightControlLogic
-from src.backend.core.light_schemas import LightIntent, LightAction, PriorityLevel, LightEntity
+from src.backend.departments.presentation.lcl import LightControlLogic
+from src.backend.departments.presentation.light_schemas import LightIntent, LightAction, PriorityLevel, LightEntity
 
 def test_gatekeeper_rate_limit():
     lcl = LightControlLogic()

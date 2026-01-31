@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
-from .intent_interpreter import IntentInterpreter
+from .interpreter import IntentInterpreter
 from .visual_schemas import (
     EmbodimentContract, TemporalState, CognitiveMetadata, IntentData,
     TemporalPhase, ContractIntentCategory

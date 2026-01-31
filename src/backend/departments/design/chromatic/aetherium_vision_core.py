@@ -5,7 +5,7 @@ import logging
 from typing import Tuple, Optional, Union
 import numpy as np
 from dataclasses import dataclass
-from src.backend.core.state.aether_state import AetherState, AetherOutput
+from src.backend.genesis_core.state.aether_state import AetherState, AetherOutput
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

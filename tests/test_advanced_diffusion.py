@@ -2,7 +2,7 @@ import pytest
 import torch
 from unittest.mock import MagicMock, patch
 from src.backend.private.advanced_diffusion import AdvancedDiffusion
-from src.backend.core.correction_schemas import CorrectionEvent, SpatialMask, CorrectionAction, StructuralGuide
+from src.backend.genesis_core.logenesis.correction_schemas import CorrectionEvent, SpatialMask, CorrectionAction, StructuralGuide
 from PIL import Image
 
 @pytest.fixture
