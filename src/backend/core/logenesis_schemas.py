@@ -20,6 +20,15 @@ class LogenesisState(str, Enum):
     VOID = "VOID"
     AWAKENED = "AWAKENED"
     NIRODHA = "NIRODHA"
+    COLLAPSED = "COLLAPSED"
+
+class StateMetrics(BaseModel):
+    """
+    Measurable dimensions of the system's internal cognitive physics.
+    """
+    intent_entropy: float = Field(..., description="Internal conflict level (0.0=Crystal Clear, 1.0=Chaos)")
+    temporal_coherence: float = Field(..., description="Logical continuity from previous state (0.0=Disjoint, 1.0=Fluid)")
+    structural_stability: float = Field(..., description="Overall system integrity (0.0=Collapse, 1.0=Stable)")
 
 class IntentVector(BaseModel):
     """
@@ -39,6 +48,7 @@ class ExpressionState(BaseModel):
     This replaces static 'Personas'. It drifts based on interaction pressure.
     """
     current_vector: IntentVector = Field(..., description="The current smoothed expression vector")
+    previous_vector: Optional[IntentVector] = Field(default=None, description="The vector from the previous time step")
     velocity: float = Field(default=0.0, description="Rate of change in the vector (Volatility)")
     inertia: float = Field(default=0.8, description="Current resistance to change (0.1=Fluid, 0.9=Rigid)")
     last_updated: datetime = Field(default_factory=datetime.now, description="Last interaction timestamp")
@@ -109,6 +119,7 @@ class LogenesisResponse(BaseModel):
     audio_qualia: Optional[AudioQualia] = None
     physics_params: Optional[PhysicsParams] = None
     intent_debug: Optional[IntentVector] = None  # For testbed visualization
+    state_metrics: Optional[StateMetrics] = None # The physics of thought report
     recall_proposal: Optional[RecallProposal] = None # Proposed memory recall handshake
     light_intent: Optional[LightIntent] = None # Direct bridge to LCL
     visual_analysis: Optional[VisualParameters] = None # New high-fidelity intent vector
