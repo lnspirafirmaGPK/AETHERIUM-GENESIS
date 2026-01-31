@@ -9,11 +9,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
-from src.backend.core.logenesis_engine import LogenesisEngine
-from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
-from src.backend.core.visual_schemas import TemporalPhase, IntentCategory, BaseShape
+import math
+from src.backend.genesis_core.logenesis.engine import LogenesisEngine
+from src.backend.genesis_core.logenesis.schemas import LogenesisResponse, IntentPacket
+from src.backend.genesis_core.logenesis.visual_schemas import TemporalPhase, IntentCategory, BaseShape
 from src.backend.auth.routes import router as auth_router
+from src.backend.departments.development.javana_core.reflex_kernel import JavanaKernel
+from src.backend.departments.development.javana_core.responses import REFLEX_PARAMS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")
@@ -53,6 +57,8 @@ class DeepgramTranscriber:
 # Initialize Engine and Transcriber
 engine = LogenesisEngine()
 transcriber = DeepgramTranscriber(api_key=os.getenv("DEEPGRAM_API_KEY"))
+# Initialize JAVANA (The Reflex System)
+javana = JavanaKernel()
 
 clients = set()
 
@@ -77,6 +83,38 @@ async def websocket_v2_endpoint(websocket: WebSocket):
             if "bytes" in message:
                 # Handle binary audio (Mock: ignore or simple energy check)
                 audio_data = message["bytes"]
+
+                # --- JAVANA: Raw Speed Transducer ---
+                # Calculate Energy (RMS) from raw bytes
+                if len(audio_data) > 0:
+                    # Simple RMS approximation (assuming 8-bit unsigned or just signal magnitude)
+                    # Normalizing 0-255 byte values to 0.0-1.0 energy
+                    # Using variance from 128 (silence) for better accuracy if 8-bit PCM
+                    rms = math.sqrt(sum((b - 128)**2 for b in audio_data) / len(audio_data)) / 128.0
+
+                    # Update JAVANA Sensory Memory
+                    javana.update_sensors(energy=rms)
+
+                    # Check for Reflex
+                    reflex_action = javana.fast_react()
+                    if reflex_action:
+                        # INTERRUPT! Send Pre-baked Response immediately
+                        p = REFLEX_PARAMS[reflex_action]
+                        payload = {
+                            "type": "VISUAL_UPDATE",
+                            "payload": {
+                                "intent": p["intent_category"],
+                                "energy": p["energy_level"],
+                                "shape": p["visual_parameters"]["base_shape"],
+                                "color_code": p["visual_parameters"]["color_palette"]
+                            },
+                            "transcript_preview": f"[{reflex_action}]",
+                            "text_content": None
+                        }
+                        await websocket.send_text(json.dumps(payload))
+                        # continue # Skip AI processing for this frame (Optional, depending on desired overlap)
+                        # We continue to let transcriber run, but visual feedback is hijacked.
+
                 # In a real scenario, we'd feed this to transcriber
                 continue
 
@@ -252,6 +290,22 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Server Error: {e}")
 
-# Mount static files (Must be after specific routes)
-app.mount("/gunui", StaticFiles(directory="gunui"), name="gunui")
-app.mount("/", StaticFiles(directory=".", html=True), name="root")
+# Mount static files and routes (Must be after specific routes)
+
+# 1. Specific Asset Routes (for clean URLs in PWA)
+@app.get("/sw.js")
+async def get_sw():
+    return FileResponse("src/frontend/public/sw.js", media_type="application/javascript")
+
+@app.get("/manifest.json")
+async def get_manifest():
+    return FileResponse("src/frontend/public/manifest.json", media_type="application/json")
+
+# 2. Mount Subdirectories
+app.mount("/gunui", StaticFiles(directory="src/frontend/public/gunui"), name="gunui")
+app.mount("/icons", StaticFiles(directory="src/frontend/public/icons"), name="icons")
+app.mount("/public", StaticFiles(directory="src/frontend/public"), name="public")
+
+# 3. Mount Root (The Living Interface)
+# NOTE: We mount src/frontend as root, so index.html is served at /
+app.mount("/", StaticFiles(directory="src/frontend", html=True), name="root")

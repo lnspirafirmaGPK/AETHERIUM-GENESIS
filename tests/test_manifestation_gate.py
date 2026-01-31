@@ -1,146 +1,116 @@
 import pytest
-from src.backend.core.logenesis_engine import LogenesisEngine
-from src.backend.core.light_schemas import LightAction
+from unittest.mock import MagicMock, AsyncMock
+from src.backend.genesis_core.logenesis.engine import LogenesisEngine
+from src.backend.departments.presentation.light_schemas import LightAction
+from src.backend.genesis_core.logenesis.schemas import IntentPacket
+from src.backend.genesis_core.logenesis.visual_schemas import VisualParameters, IntentCategory, BaseShape, VisualSpecifics
 
-def test_explicit_command_bypass():
+# --- Fixtures ---
+@pytest.fixture
+def engine():
+    return LogenesisEngine()
+
+# --- Tests ---
+
+@pytest.mark.asyncio
+async def test_explicit_command_bypass(engine):
     """
-    Verify that explicit commands still work and bypass the gate logic
-    (or are handled by the parser first).
+    Verify that explicit commands trigger manifestation regardless of energy.
     """
-    engine = LogenesisEngine()
+    # Mock the interpreter to return a COMMAND intent
+    mock_contract = MagicMock()
+    mock_contract.text_content = "Executing command."
 
-    # "circle" should trigger explicit parser
-    response = engine.process("Make a circle")
+    # Mock Adapter to return VisualParams for a Command
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.COMMAND,
+        emotional_valence=0.0,
+        energy_level=0.1, # Even low energy should pass for commands
+        semantic_concepts=["circle"],
+        visual_parameters=VisualSpecifics(
+            base_shape=BaseShape.CIRCLE,
+            turbulence=0.0,
+            particle_density=1.0,
+            color_palette="#FFFFFF"
+        )
+    ))
 
+    # Must mock interpreter.interpret to return our contract
+    engine.interpreter.interpret = AsyncMock(return_value=mock_contract)
+
+    response = await engine.process("Make a circle")
+
+    assert response.manifestation_granted is True
     assert response.light_intent is not None
-    assert response.light_intent.action == LightAction.MANIFEST
     assert response.light_intent.shape_name == "circle"
 
-def test_neutral_conversation_no_manifest():
+@pytest.mark.asyncio
+async def test_neutral_conversation_blocked(engine):
     """
     Verify that low-intensity conversation does NOT trigger manifestation.
     """
-    engine = LogenesisEngine()
+    # Mock Adapter to return Low Energy CHAT
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.1,
+        energy_level=0.1, # Too low to manifest
+        semantic_concepts=[],
+        visual_parameters=VisualSpecifics(base_shape=BaseShape.CLOUD, turbulence=0.1, particle_density=0.1, color_palette="#FFFFFF")
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="Just chatting."))
 
-    # Neutral/Low intensity input
-    response = engine.process("Hello, how are you?")
+    response = await engine.process("Hello, how are you?")
 
-    # Should be None unless the engine starts with high random drift,
-    # but default state is usually neutral.
+    # Should be False because energy/valence/turbulence are all low
+    assert response.manifestation_granted is False
     assert response.light_intent is None
 
-def test_manifestation_gate_subjective():
+@pytest.mark.asyncio
+async def test_high_intensity_manifestation(engine):
     """
-    Verify that high subjective intensity triggers 'spiral'.
-    We mix in some urgency ('now') to lower inertia and speed up the test,
-    otherwise drifting from 0.1 to 0.8 with 0.95 inertia takes too long.
+    Verify that HIGH intensity conversation triggers manifestation.
     """
-    engine = LogenesisEngine()
+    # Mock Adapter to return High Energy CHAT
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.0,
+        energy_level=0.8, # > 0.6 Threshold
+        semantic_concepts=[],
+        visual_parameters=VisualSpecifics(base_shape=BaseShape.VORTEX, turbulence=0.8, particle_density=0.8, color_palette="#FF0000")
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="I am angry!"))
 
-    # "sad" -> Subjective=0.9
-    # "now" -> Urgency=0.9 (Lowers inertia)
-    input_text = "I feel extremely sad now."
+    response = await engine.process("I feel intense emotion!")
 
-    # Loop to drift state
-    triggered = False
-    for _ in range(10):
-        response = engine.process(input_text, session_id="test_sub")
-        if response.light_intent:
-            # Verify it picked the right dominant trait
-            # Since we added "now", urgency is also high.
-            # Logic: if subjective >= max_intensity.
-            # If subjective=0.9 and urgency=0.9, max is 0.9.
-            # Check logic order: Precision -> Subjective -> Urgency.
-            # So Subjective checks first. It should win if equal.
-            if response.light_intent.shape_name == "spiral":
-                triggered = True
-                break
+    assert response.manifestation_granted is True
+    assert response.light_intent is not None
+    assert response.light_intent.shape_name == "vortex"
 
-    assert triggered, "Did not trigger manifestation for high subjective load"
-    assert response.light_intent.action == LightAction.MANIFEST
-    assert response.light_intent.shape_name == "spiral"
-
-def test_manifestation_gate_precision():
+@pytest.mark.asyncio
+async def test_manifestation_gate_precision(engine):
     """
-    Verify that high precision intensity triggers 'square'.
+    Verify that High Precision (Analysis) triggers manifestation.
+    Logic: If intent is CHAT but implies deep analysis (high density/energy), it might manifest.
+    But strictly, LogenesisEngine._check_manifestation_gate checks energy, valence, turbulence.
     """
-    engine = LogenesisEngine()
+    # Mock Adapter for Analysis
+    engine.adapter.translate = MagicMock(return_value=VisualParameters(
+        intent_category=IntentCategory.CHAT,
+        emotional_valence=0.0,
+        energy_level=0.5,
+        semantic_concepts=["analysis"],
+        visual_parameters=VisualSpecifics(
+            base_shape=BaseShape.CUBE,
+            turbulence=0.7, # High turbulence/complexity triggers gate
+            particle_density=0.9,
+            color_palette="#0000FF"
+        )
+    ))
+    engine.interpreter.interpret = AsyncMock(return_value=MagicMock(text_content="Analyzing data."))
 
-    # "analyze" -> Precision=0.95
-    # "now" -> Urgency=0.9 (Lowers inertia)
-    input_text = "Analyze the code now."
+    response = await engine.process("Analyze the code.")
 
-    triggered = False
-    for _ in range(10):
-        response = engine.process(input_text, session_id="test_prec")
-        if response.light_intent:
-            if response.light_intent.shape_name == "square":
-                triggered = True
-                break
-
-    assert triggered, "Did not trigger manifestation for high precision load"
-    assert response.light_intent.shape_name == "square"
-
-def test_manifestation_gate_urgency():
-    """
-    Verify that high urgency intensity triggers 'circle'.
-    """
-    engine = LogenesisEngine()
-
-    # "now", "urgent", "quick" -> Urgency=0.9
-    # No other keywords, so subjective/precision stay low.
-    input_text = "Do it now! Urgent! Quick!"
-
-    triggered = False
-    for _ in range(10):
-        response = engine.process(input_text, session_id="test_urg")
-        if response.light_intent:
-            triggered = True
-            break
-
-    assert triggered, "Did not trigger manifestation for high urgency"
-    assert response.light_intent.shape_name == "circle"
-
-def test_manifestation_gate_epistemic():
-    """
-    Verify that high epistemic need triggers 'line'.
-    """
-    engine = LogenesisEngine()
-
-    # "search", "find" -> Epistemic=0.9
-    # "now" -> Urgency=0.9
-    input_text = "Find the answer now."
-
-    triggered = False
-    for _ in range(10):
-        response = engine.process(input_text, session_id="test_epi")
-        if response.light_intent:
-             # Epistemic checked last in my implementation logic?
-             # Let's check logic: Precision -> Subjective -> Urgency -> Epistemic.
-             # If Epistemic is high, but Urgency is also high (due to 'now'), Urgency might win because it's checked earlier?
-             # Wait, logic is:
-             # if precision >= max: ...
-             # elif subjective >= max: ...
-             # elif urgency >= max: ...
-             # elif epistemic >= max: ...
-
-             # If epistemic=0.9 and urgency=0.9. Max=0.9.
-             # Urgency is checked before Epistemic. So it will return Circle.
-             # This is a flaw in my test design or logic.
-             # To test Epistemic, I need Epistemic to be strictly higher than others.
-             # But without "now", inertia is high.
-             # I should just iterate more times without "now".
-             pass
-
-    # Retry with pure epistemic input (slower drift)
-    input_text_pure = "Search find what define"
-
-    triggered = False
-    for _ in range(30): # Give it more time to drift
-        response = engine.process(input_text_pure, session_id="test_epi_pure")
-        if response.light_intent:
-            triggered = True
-            break
-
-    assert triggered, "Did not trigger manifestation for high epistemic"
-    assert response.light_intent.shape_name == "line"
+    # Triggered by turbulence > 0.6
+    assert response.manifestation_granted is True
+    assert response.light_intent is not None
+    assert response.light_intent.shape_name == "cube"
