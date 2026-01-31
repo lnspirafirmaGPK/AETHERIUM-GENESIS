@@ -9,10 +9,6 @@ requests
 google-generativeai
 Pillow
 httpx
-torch
-diffusers
-transformers
-accelerate
 websockets
 python-jose
 itsdangerous
