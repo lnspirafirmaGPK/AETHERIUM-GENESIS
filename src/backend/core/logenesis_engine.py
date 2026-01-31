@@ -9,7 +9,7 @@ import logging
 
 from .logenesis_schemas import (
     LogenesisResponse, LogenesisState, IntentVector, ExpressionState,
-    VisualQualia, AudioQualia, PhysicsParams, IntentPacket
+    VisualQualia, AudioQualia, PhysicsParams, IntentPacket, StateMetrics
 )
 from .light_schemas import LightIntent, LightAction
 from .formation_manager import FormationManager
@@ -194,9 +194,44 @@ class LogenesisEngine:
                      )
                  )
 
-        # 2. State Drift Calculation
+        # 2. Physics of Thought (Entropy & Coherence)
         current_state = self.state_store.get_state(session_id)
+
+        # 2a. Calculate Entropy & Apply Homeostasis (Level 1 Correction)
+        raw_entropy = self._calculate_entropy(input_intent)
+        structural_stability = 1.0 - raw_entropy
+
+        # Apply Homeostasis if entropy is high (Correction)
+        if raw_entropy > 0.6:
+            logger.info(f"Entropy High ({raw_entropy:.2f}). Applying Homeostasis.")
+            input_intent = self._apply_homeostasis(input_intent, raw_entropy)
+            # Re-calculate stability after correction (simulated improvement)
+            structural_stability = min(1.0, structural_stability + 0.2)
+
+        # 2b. Calculate Temporal Coherence
+        coherence = self._calculate_coherence(current_state, input_intent)
+
+        # 2c. Level 3 Check: Rejection (Collapse)
+        if raw_entropy > 0.9 or coherence < 0.2:
+            logger.warning(f"State Collapse: Entropy={raw_entropy:.2f}, Coherence={coherence:.2f}")
+            return LogenesisResponse(
+                state=LogenesisState.COLLAPSED,
+                text_content="I cannot form a stable internal structure for this request.",
+                visual_qualia=VisualQualia(color="#000000", intensity=0.0, turbulence=0.0, shape="void"),
+                audio_qualia=AudioQualia(rhythm_density=0.0, tone_texture="static", amplitude_bias=0.0),
+                state_metrics=StateMetrics(
+                    intent_entropy=raw_entropy,
+                    temporal_coherence=coherence,
+                    structural_stability=0.0
+                ),
+                manifestation_granted=False
+            )
+
+        # 2d. State Drift Calculation
         proposed_state = self._drift_state(current_state, input_intent)
+
+        # Update previous vector for next cycle
+        proposed_state.previous_vector = current_state.current_vector
 
         # Noise Filtering / Stillness Protocol
         significance_threshold = 0.05
@@ -232,6 +267,9 @@ class LogenesisEngine:
         response_text = ""
         if contract and contract.text_content:
             response_text = contract.text_content
+            # Level 2 Check: Feedback (Injection)
+            if coherence < 0.5:
+                response_text = f"[Degraded Coherence: {coherence:.2f}] {response_text}"
         else:
             if packet.modality == "visual":
                 state_name = "PROCESSING"
@@ -240,6 +278,8 @@ class LogenesisEngine:
                 response_text = f"Visual input received. State: {state_name}."
             else:
                 response_text = self._synthesize_text(drifted_vector, input_intent, recalled_context)
+                if coherence < 0.5:
+                    response_text = f"[Unstable] {response_text}"
 
         return LogenesisResponse(
             state=self.state,
@@ -248,6 +288,11 @@ class LogenesisEngine:
             audio_qualia=audio,
             physics_params=physics,
             intent_debug=drifted_vector,
+            state_metrics=StateMetrics(
+                intent_entropy=raw_entropy,
+                temporal_coherence=coherence,
+                structural_stability=structural_stability
+            ),
             recall_proposal=recall_proposal,
             light_intent=light_intent,
             visual_analysis=visual_params, # The new payload
@@ -376,6 +421,109 @@ class LogenesisEngine:
             formation_data=coords,
             text_content=f"Manifesting {shape_name}"
         )
+
+    def _calculate_entropy(self, vector: IntentVector) -> float:
+        """Calculates the internal conflict (Intent Entropy) of a state vector.
+
+        Entropy measures the incompatibility of active dimensions.
+        Constraints:
+        1. High Precision + High Subjectivity = Conflict (Analytic Hallucination)
+        2. High Urgency + High Precision = Conflict (Cognitive Gridlock)
+
+        Args:
+            vector: The intent vector to analyze.
+
+        Returns:
+            A float between 0.0 (Crystal Clear) and 1.0 (Chaos).
+        """
+        entropy = 0.0
+
+        # Constraint 1: Precision vs Subjectivity
+        # Trying to be rigid about a feeling.
+        if vector.precision_required > 0.5 and vector.subjective_weight > 0.5:
+            conflict = (vector.precision_required - 0.5) * (vector.subjective_weight - 0.5) * 4.0
+            entropy += conflict # Max add: 0.5 * 0.5 * 4 = 1.0
+
+        # Constraint 2: Urgency vs Precision
+        # "Do it perfectly, now."
+        if vector.decision_urgency > 0.6 and vector.precision_required > 0.6:
+            conflict = (vector.decision_urgency - 0.6) * (vector.precision_required - 0.6) * 6.25
+            entropy += conflict # Max add: 0.4 * 0.4 * 6.25 = 1.0
+
+        # Epistemic Need usually trades off with Subjective Weight, but can coexist (e.g. History)
+        # We add a small penalty if both are maxed to represent "Cognitive Load"
+        if vector.epistemic_need > 0.8 and vector.subjective_weight > 0.8:
+            entropy += 0.2
+
+        return min(1.0, entropy)
+
+    def _calculate_coherence(self, current_state: ExpressionState, proposed_vector: IntentVector) -> float:
+        """Calculates the Temporal Coherence of the state transition.
+
+        Measures if the proposed state logically follows the previous state given the inertia.
+
+        Args:
+            current_state: The state before the new intent is fully integrated.
+            proposed_vector: The target intent vector.
+
+        Returns:
+            A float between 0.0 (Disjoint) and 1.0 (Fluid).
+        """
+        # If no previous vector (start of session), coherence is perfect
+        prev = current_state.current_vector
+
+        # Calculate Euclidean distance
+        dist = math.sqrt(
+            (proposed_vector.epistemic_need - prev.epistemic_need)**2 +
+            (proposed_vector.subjective_weight - prev.subjective_weight)**2 +
+            (proposed_vector.decision_urgency - prev.decision_urgency)**2 +
+            (proposed_vector.precision_required - prev.precision_required)**2
+        )
+
+        # Max theoretical distance in 4D unit cube is 2.0
+        # Expected max drift depends on Inertia (Inverse of Fluidity)
+        # If Inertia is High (0.9), allowed drift is Low.
+        # If Inertia is Low (0.1), allowed drift is High.
+
+        allowed_drift = (1.0 - current_state.inertia) * 2.0 # E.g. Inertia 0.8 -> Allowed 0.4 distance
+        allowed_drift = max(0.2, allowed_drift) # Minimum elasticity
+
+        if dist <= allowed_drift:
+            return 1.0
+
+        # Penalize excess drift
+        excess = dist - allowed_drift
+        coherence = max(0.0, 1.0 - (excess * 1.5)) # Steep penalty
+        return coherence
+
+    def _apply_homeostasis(self, vector: IntentVector, entropy: float) -> IntentVector:
+        """Applies Level 1 Correction: Homeostasis.
+
+        Clamps incompatible dimensions to reduce entropy.
+
+        Args:
+            vector: The high-entropy vector.
+            entropy: The calculated entropy score.
+
+        Returns:
+            A corrected IntentVector.
+        """
+        # Create a copy
+        new_vector = vector.model_copy()
+        correction_factor = min(0.5, entropy * 0.5) # Max correction 25%
+
+        # Fix Precision vs Subjectivity
+        if new_vector.precision_required > 0.5 and new_vector.subjective_weight > 0.5:
+            # Reduce both to relieve tension
+            new_vector.precision_required -= correction_factor
+            new_vector.subjective_weight -= correction_factor
+
+        # Fix Urgency vs Precision
+        if new_vector.decision_urgency > 0.6 and new_vector.precision_required > 0.6:
+            # Sacrifice Urgency for Precision (Logenesis prefers correctness)
+            new_vector.decision_urgency -= (correction_factor * 1.5)
+
+        return new_vector
 
     def enter_nirodha(self) -> LogenesisResponse:
         """Transitions the system into the Nirodha (Stillness) state.
