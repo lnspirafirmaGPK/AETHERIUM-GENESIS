@@ -7,13 +7,13 @@ from datetime import datetime
 from pydantic import ValidationError
 import logging
 
-from .logenesis_schemas import (
+from .schemas import (
     LogenesisResponse, LogenesisState, IntentVector, ExpressionState,
     VisualQualia, AudioQualia, PhysicsParams, IntentPacket, StateMetrics
 )
-from .light_schemas import LightIntent, LightAction
-from .formation_manager import FormationManager
-from src.backend.core.state.aether_state import AetherOutput, AetherState
+from src.backend.departments.presentation.light_schemas import LightIntent, LightAction
+from src.backend.departments.presentation.formation_manager import FormationManager
+from src.backend.genesis_core.state.aether_state import AetherOutput, AetherState
 
 # New Imports
 from .visual_schemas import VisualParameters, IntentCategory, BaseShape, VisualSpecifics
@@ -615,7 +615,7 @@ class LogenesisEngine:
         Returns:
             A RecallProposal if a match is found, otherwise None.
         """
-        from .logenesis_schemas import RecallProposal
+        from .schemas import RecallProposal
         text = text.lower()
         for item in memory_index:
             topic = item.get('topic', '').lower()

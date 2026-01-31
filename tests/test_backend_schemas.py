@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 # Add project root to sys.path to allow imports from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.backend.core.correction_schemas import CorrectionAction, SpatialMask, CorrectionEvent, StructuralGuide
+from src.backend.genesis_core.logenesis.correction_schemas import CorrectionAction, SpatialMask, CorrectionEvent, StructuralGuide
 
 def test_correction_action_enum():
     assert CorrectionAction.MOVE.value == "move"

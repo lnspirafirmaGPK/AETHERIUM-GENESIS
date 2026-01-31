@@ -7,8 +7,8 @@ import uuid
 # Ensure src is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.backend.core.lcl import LightControlLogic
-from src.backend.core.light_schemas import LightEntity
+from src.backend.departments.presentation.lcl import LightControlLogic
+from src.backend.departments.presentation.light_schemas import LightEntity
 
 def run_benchmark(count: int, frames: int = 100):
     print(f"\n--- Benchmarking with {count} entities for {frames} frames ---")
