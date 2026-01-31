@@ -33,6 +33,13 @@ if __name__ == "__main__":
     print(f"Local Access: http://localhost:{port}")
     print(f"Network Access: http://{local_ip}:{port}")
     print("Protocol: WebSocket & HTTP")
+
+    # Check for Gemini API Key
+    if not os.getenv("GOOGLE_API_KEY"):
+        print("\n[WARNING]: GOOGLE_API_KEY not found in environment.")
+        print("           System will run in SIMULATED INTENT mode (Regex Fallback).")
+        print("           For full intelligence, add GOOGLE_API_KEY to .env\n")
+
     print("Status: Awakening...\n")
 
     # 3. Run the FastAPI Server using Uvicorn
