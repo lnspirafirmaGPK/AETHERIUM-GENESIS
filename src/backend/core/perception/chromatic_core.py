@@ -37,8 +37,40 @@ class PixelData:
 
 # --- 2. แกนประมวลผลฟิสิกส์ (Physics Engine) ---
 class ChromaticEngine:
-    def __init__(self):
-        pass
+    def __init__(self, capacity: int = 1000):
+        self.capacity = capacity
+        self.count = 0
+        # Simple buffer simulation
+        self.particles = [None] * capacity
+
+    def spawn(self, count):
+        """
+        Allocates particle slots safely.
+        """
+        # Validate and normalize count
+        try:
+            count = int(count)
+        except (ValueError, TypeError):
+            return []
+
+        # Guard against non-positive values
+        if count <= 0:
+            return []
+
+        # Compute spawn_count
+        spawn_count = min(count, self.capacity - self.count)
+
+        if spawn_count <= 0:
+            return []
+
+        idx = self.count
+        end_idx = idx + spawn_count
+
+        # Update state
+        self.count += spawn_count
+
+        # Return allocated indices (simulating the slice logic)
+        return list(range(idx, end_idx))
 
     def _clamp(self, value, max_val=255):
         return max(0, min(value, max_val))

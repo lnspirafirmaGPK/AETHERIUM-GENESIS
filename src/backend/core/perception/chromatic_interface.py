@@ -38,6 +38,63 @@ class ChromaticSanctum:
         if not os.access(self.binary_path, os.X_OK):
              raise PermissionError(f"Chromatic Sanctum binary is not executable: {self.binary_path}")
 
+        self.process: Optional[subprocess.Popen] = None
+
+    def start(self):
+        """
+        Starts the persistent subprocess.
+        """
+        if self.process is not None:
+            return
+
+        try:
+            self.process = subprocess.Popen(
+                [self.binary_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to start process: {e}")
+
+    def stop(self):
+        """
+        Terminates the process and safely closes file descriptors to prevent leaks.
+        """
+        if self.process is None:
+            return
+
+        # 1. Terminate Logic
+        try:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=0.2)
+        except Exception:
+            # Process might be already gone or permission denied
+            pass
+        finally:
+            # 2. Explicit Pipe Cleanup
+            pipes = [
+                ('stdin', self.process.stdin),
+                ('stdout', self.process.stdout),
+                ('stderr', self.process.stderr)
+            ]
+
+            for name, pipe in pipes:
+                if pipe is not None:
+                    try:
+                        pipe.close()
+                    except (ValueError, OSError, BrokenPipeError):
+                        pass
+
+            # 3. Clear Reference
+            self.process = None
+
     def _run_command(self, args: list) -> Dict[str, Any]:
         """
         Execute the binary with the given arguments and return the parsed JSON response.
