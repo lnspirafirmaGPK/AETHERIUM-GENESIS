@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from src.backend.core.logenesis_engine import LogenesisEngine
 from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
@@ -252,6 +253,22 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Server Error: {e}")
 
-# Mount static files (Must be after specific routes)
-app.mount("/gunui", StaticFiles(directory="gunui"), name="gunui")
-app.mount("/", StaticFiles(directory=".", html=True), name="root")
+# Mount static files and routes (Must be after specific routes)
+
+# 1. Specific Asset Routes (for clean URLs in PWA)
+@app.get("/sw.js")
+async def get_sw():
+    return FileResponse("src/frontend/public/sw.js", media_type="application/javascript")
+
+@app.get("/manifest.json")
+async def get_manifest():
+    return FileResponse("src/frontend/public/manifest.json", media_type="application/json")
+
+# 2. Mount Subdirectories
+app.mount("/gunui", StaticFiles(directory="src/frontend/public/gunui"), name="gunui")
+app.mount("/icons", StaticFiles(directory="src/frontend/public/icons"), name="icons")
+app.mount("/public", StaticFiles(directory="src/frontend/public"), name="public")
+
+# 3. Mount Root (The Living Interface)
+# NOTE: We mount src/frontend as root, so index.html is served at /
+app.mount("/", StaticFiles(directory="src/frontend", html=True), name="root")
