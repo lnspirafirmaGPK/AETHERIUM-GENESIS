@@ -5,7 +5,7 @@ import asyncio
 from typing import Dict, Any, Optional
 import google.generativeai as genai
 
-from .intent_interpreter import IntentInterpreter
+from .interpreter import IntentInterpreter
 from .visual_schemas import EmbodimentContract
 from .verifier import VisualVerifier
 

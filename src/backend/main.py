@@ -12,12 +12,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 import math
-from src.backend.core.logenesis_engine import LogenesisEngine
-from src.backend.core.logenesis_schemas import LogenesisResponse, IntentPacket
-from src.backend.core.visual_schemas import TemporalPhase, IntentCategory, BaseShape
+from src.backend.genesis_core.logenesis.engine import LogenesisEngine
+from src.backend.genesis_core.logenesis.schemas import LogenesisResponse, IntentPacket
+from src.backend.genesis_core.logenesis.visual_schemas import TemporalPhase, IntentCategory, BaseShape
 from src.backend.auth.routes import router as auth_router
-from src.backend.core.javana.reflex_kernel import JavanaKernel
-from src.backend.core.javana.responses import REFLEX_PARAMS
+from src.backend.departments.development.javana_core.reflex_kernel import JavanaKernel
+from src.backend.departments.development.javana_core.responses import REFLEX_PARAMS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AetherServer")

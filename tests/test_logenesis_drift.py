@@ -1,8 +1,8 @@
 import pytest
 import os
 import json
-from src.backend.core.logenesis_engine import LogenesisEngine, StateStore
-from src.backend.core.logenesis_schemas import IntentVector, ExpressionState
+from src.backend.genesis_core.logenesis.engine import LogenesisEngine, StateStore
+from src.backend.genesis_core.logenesis.schemas import IntentVector, ExpressionState
 
 @pytest.fixture
 def clean_state_store():

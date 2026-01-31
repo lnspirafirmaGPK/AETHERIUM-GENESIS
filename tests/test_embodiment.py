@@ -1,11 +1,11 @@
 import pytest
 import asyncio
-from src.backend.core.visual_schemas import (
+from src.backend.genesis_core.logenesis.visual_schemas import (
     EmbodimentContract, TemporalState, CognitiveMetadata, IntentData,
     TemporalPhase, ContractIntentCategory, VisualParameters, BaseShape
 )
-from src.backend.core.embodiment_adapter import EmbodimentAdapter
-from src.backend.core.simulated_interpreter import SimulatedIntentInterpreter
+from src.backend.genesis_core.logenesis.embodiment import EmbodimentAdapter
+from src.backend.genesis_core.logenesis.simulated_interpreter import SimulatedIntentInterpreter
 
 def test_contract_schema():
     contract = EmbodimentContract(

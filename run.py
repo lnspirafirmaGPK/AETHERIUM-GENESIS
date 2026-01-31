@@ -39,7 +39,7 @@ if __name__ == "__main__":
     # Reload is enabled for development convenience
     try:
         uvicorn.run(
-            "src.backend.server:app",
+            "src.backend.main:app",
             host="0.0.0.0",
             port=port,
             reload=True

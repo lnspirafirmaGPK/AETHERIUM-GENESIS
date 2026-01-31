@@ -1,7 +1,7 @@
 import torch
 import pytest
-from src.backend.core.region_extractor import RegionExtractor
-from src.backend.core.correction_schemas import SpatialMask
+from src.backend.departments.design.chromatic.region_extractor import RegionExtractor
+from src.backend.genesis_core.logenesis.correction_schemas import SpatialMask
 
 def test_extract():
     frame = torch.randn(3, 100, 100)
