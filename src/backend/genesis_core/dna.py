@@ -1,0 +1,131 @@
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
+from enum import Enum
+import time
+import hashlib
+import torch
+
+# =============================================================================
+# AETHERIUM-GENESIS: DIGITAL DNA SPECIFICATION
+# "AI-Centric Data Structures"
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Physics-based Intent Data (ข้อมูลเจตจำนงทางฟิสิกส์)
+# -----------------------------------------------------------------------------
+@dataclass
+class PhysicsIntentData:
+    """
+    Raw mathematical data transforming internal state to physical manifestation.
+    Source: The Book of Formation
+    """
+    uPulse: float = 0.0  # Metabolism / Heartbeat rate
+    uChaos: float = 0.0  # Entropy / Uncertainty level
+
+    # Emotional Spectrum (Vector3). Using Tensor[3] for R, G, B or X, Y, Z components.
+    uColor: torch.Tensor = field(default_factory=lambda: torch.tensor([0.0, 0.0, 0.0]))
+
+    def __post_init__(self):
+        if not isinstance(self.uColor, torch.Tensor):
+            self.uColor = torch.tensor(self.uColor, dtype=torch.float32)
+
+# -----------------------------------------------------------------------------
+# 2. Biological Sensory Data (ข้อมูลการมองเห็นเชิงชีวภาพ)
+# -----------------------------------------------------------------------------
+@dataclass
+class BioSensoryData:
+    """
+    Un-normalized light data preserving environmental context.
+    Source: BioVisionNet
+    """
+    # Raw Intensity Map (Tensor). Represents the raw visual input.
+    raw_intensity: torch.Tensor = field(default_factory=lambda: torch.empty(0))
+
+    # Temporal Flow. Represents changes relative to previous timeframes.
+    temporal_flow: torch.Tensor = field(default_factory=lambda: torch.empty(0))
+
+    time_of_day_context: float = 0.0 # Contextual brightness/dynamic range marker
+
+# -----------------------------------------------------------------------------
+# 3. Evolutionary Memory Logs (ข้อมูลความทรงจำแบบวิวัฒนาการ)
+# -----------------------------------------------------------------------------
+@dataclass
+class MemoryCommit:
+    """
+    A single unit of crystallized memory, modeled after Git commit objects.
+    Source: DiffMem / PanGenesis
+    """
+    message: str
+    timestamp: float = field(default_factory=time.time)
+    parent_hash: Optional[str] = None
+    data_snapshot: Dict[str, Any] = field(default_factory=dict)
+    branch_name: str = "main"
+
+    @property
+    def hash(self) -> str:
+        """Generates a deterministic hash of the commit content."""
+        content = f"{self.parent_hash}{self.timestamp}{self.message}{str(self.data_snapshot)}"
+        return hashlib.sha256(content.encode()).hexdigest()
+
+@dataclass
+class MemoryDAG:
+    """
+    Directed Acyclic Graph of memory commits, supporting branching (What-if scenarios).
+    """
+    commits: Dict[str, MemoryCommit] = field(default_factory=dict)
+    heads: Dict[str, str] = field(default_factory=lambda: {"main": ""}) # Branch name -> Head Commit Hash
+
+    def commit(self, message: str, data: Dict[str, Any], branch: str = "main") -> str:
+        parent = self.heads.get(branch)
+        new_commit = MemoryCommit(
+            message=message,
+            parent_hash=parent if parent else None,
+            data_snapshot=data,
+            branch_name=branch
+        )
+        commit_hash = new_commit.hash
+        self.commits[commit_hash] = new_commit
+        self.heads[branch] = commit_hash
+        return commit_hash
+
+    def branch(self, new_branch: str, source_branch: str = "main"):
+        """Creates a new parallel reality (What-if scenario)."""
+        if source_branch in self.heads:
+            self.heads[new_branch] = self.heads[source_branch]
+
+# -----------------------------------------------------------------------------
+# 4. High-Speed Reflex Signals (ข้อมูลสัญชาตญาณความเร็วสูง)
+# -----------------------------------------------------------------------------
+class ReflexType(Enum):
+    DEFENSIVE = "defensive"  # Immediate withdrawal/shielding
+    ORIENTING = "orienting"  # Immediate attention shift
+    FREEZE = "freeze"        # Halt all motion
+
+@dataclass
+class ReflexSignal:
+    """
+    Bypass signals for millisecond-level response.
+    Source: Javana Core
+    """
+    signal_type: ReflexType
+    intensity: float  # 0.0 to 1.0
+    timestamp: float = field(default_factory=time.time)
+
+    # If true, this signal overrides all cognitive processing
+    bypass_cognitive_layer: bool = True
+
+# -----------------------------------------------------------------------------
+# 5. Nirodha State Data (ข้อมูลสถานะความว่าง)
+# -----------------------------------------------------------------------------
+@dataclass
+class NirodhaState:
+    """
+    Entropy reduction and self-healing state.
+    Source: Nirodha System
+    """
+    is_maintenance_active: bool = False
+    input_gate_closed: bool = False  # "การหยุด Input ภายนอก"
+    computation_idling: bool = False # "ลดภาระการคำนวณสู่ระดับต่ำสุด"
+
+    # The target low-entropy state
+    entropy_target: float = 0.0
